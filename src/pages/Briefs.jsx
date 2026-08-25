@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import BriefCard from "../components/shared/BriefCard";
 import AssetCard from "../components/shared/AssetCard";
-import OverlayPanel from "../components/layout/OverlayPanel";
 import { StatusBadge, PriorityBadge } from "../components/ui/Tag";
 import { TabBar } from "../components/ui/Tabs";
 import ViewToggle from "../components/ui/ViewToggle";
@@ -282,7 +281,6 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
       ?.map((id) => assets.find((a) => a.id === id))
       .filter(Boolean) || [];
   const [activeDeliverable, setActiveDeliverable] = useState(null);
-  const [shownDeliverable, setShownDeliverable] = useState(null);
   const [draftMessage, setDraftMessage] = useState("");
   const [threadsByDeliverable, setThreadsByDeliverable] = useState({});
   const [sentToAdmin, setSentToAdmin] = useState({});
@@ -291,7 +289,6 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
 
   const openDeliverableThread = (deliverable) => {
     setActiveDeliverable(deliverable);
-    setShownDeliverable(deliverable);
     setDraftMessage("");
     setThreadsByDeliverable((prev) =>
       prev[deliverable.id]
@@ -343,15 +340,14 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
     }));
   };
 
-  const deliverable = activeDeliverable || shownDeliverable;
-  const activeThread = deliverable
-    ? threadsByDeliverable[deliverable.id] || []
+  const activeThread = activeDeliverable
+    ? threadsByDeliverable[activeDeliverable.id] || []
     : [];
-  const mediaPreview = deliverable
-    ? buildDeliverableMediaPreview(deliverable, brief)
+  const mediaPreview = activeDeliverable
+    ? buildDeliverableMediaPreview(activeDeliverable, brief)
     : null;
-  const revisionCount = deliverable
-    ? Math.max(0, deliverable.count - deliverable.completed)
+  const revisionCount = activeDeliverable
+    ? Math.max(0, activeDeliverable.count - activeDeliverable.completed)
     : 0;
   const partnersAssociated = Array.from(
     new Set([brief.partner, ...linkedAssets.map((a) => a.partner)].filter(Boolean))
@@ -821,22 +817,17 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
         </div>
       </div>
 
-      <OverlayPanel
-        open={Boolean(activeDeliverable)}
-        onClose={closeDeliverableThread}
-        width={540}
-        height="84vh"
-        className="rounded-2xl glass-panel flex flex-col shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden"
-      >
-        {deliverable && (
-          <div className="h-full flex flex-col">
+      {activeDeliverable && (
+        <>
+          <div className="fixed inset-0 z-40 pointer-events-none" />
+          <div className="fixed right-6 top-1/2 -translate-y-1/2 h-[84vh] w-[540px] rounded-2xl glass-panel z-50 flex flex-col shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden slide-in-right">
             <div className="h-14 px-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] text-white/20 uppercase tracking-wider font-semibold leading-none">
                   Deliverable Review Thread
                 </p>
                 <p className="text-[12px] text-white/70 font-semibold mt-1 truncate">
-                  {deliverable.name}
+                  {activeDeliverable.name}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -844,7 +835,7 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
                   <span className="text-[9px] text-white/30 uppercase tracking-wider font-semibold">
                     Status
                   </span>
-                  <StatusBadge status={deliverable.status} small />
+                  <StatusBadge status={activeDeliverable.status} small />
                 </div>
                 <div className="h-8 px-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center gap-1.5">
                   <span className="text-[9px] text-white/30 uppercase tracking-wider font-semibold">
@@ -975,14 +966,14 @@ function BriefFullPage({ brief, activeTab, setActiveTab, onBack }) {
                 className="w-full py-2.5 rounded-xl bg-accent-red hover:bg-accent-red/90 text-white text-[12px] font-semibold transition-colors flex items-center justify-center gap-2"
               >
                 <ShieldCheck size={14} />
-                {sentToAdmin[deliverable.id]
+                {sentToAdmin[activeDeliverable.id]
                   ? "Sent to Admin for Review"
                   : "Send to Admin for Review"}
               </button>
             </div>
           </div>
-        )}
-      </OverlayPanel>
+        </>
+      )}
 
     </>
   );

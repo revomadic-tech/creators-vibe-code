@@ -26,24 +26,20 @@ import {
 import { StatusBadge, PriorityBadge } from "../ui/Tag";
 import MetadataRow from "../ui/MetadataRow";
 import ProgressBar from "../ui/ProgressBar";
-import OverlayPanel from "./OverlayPanel";
 
 export default function DetailPanel({
-  item: incoming,
+  item,
   type = "asset",
   onClose,
   onOpenFull,
   relatedAssets,
   onSelectRelated,
 }) {
-  const [item, setItem] = useState(incoming);
+  if (!item) return null;
+
   const isAsset = type === "asset";
   const navigate = useNavigate();
   const [railOpen, setRailOpen] = useState(false);
-
-  useEffect(() => {
-    if (incoming) setItem(incoming);
-  }, [incoming]);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -73,15 +69,15 @@ export default function DetailPanel({
   const panelWidth = isAsset && railOpen ? 880 : 560;
 
   return (
-    <OverlayPanel
-      open={Boolean(incoming)}
-      onClose={onClose}
-      width={panelWidth}
-      height="88vh"
-      className="rounded-2xl glass-panel flex shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden"
-    >
-      {item && (
-        <>
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20 pointer-events-none" />
+      <div
+        className="fixed right-6 top-1/2 -translate-y-1/2 h-[88vh] rounded-2xl glass-panel z-50 flex slide-in-right shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden"
+        style={{
+          width: panelWidth,
+          transition: "width 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
         {/* Main column */}
         <div className="flex-1 min-w-0 flex flex-col">
           {/* Header */}
@@ -196,9 +192,8 @@ export default function DetailPanel({
         {isAsset && (
           <FieldRail item={item} open={railOpen} />
         )}
-        </>
-      )}
-    </OverlayPanel>
+      </div>
+    </>
   );
 }
 
@@ -210,19 +205,12 @@ function FieldRail({ item, open }) {
 
   return (
     <div
-      className="flex-shrink-0 overflow-hidden"
+      className="flex-shrink-0 border-l border-white/[0.06] bg-black/20 backdrop-blur-sm overflow-hidden flex flex-col"
       style={{
         width: open ? 320 : 0,
-        transition: "width 0.3s cubic-bezier(0.22, 1, 0.36, 1)",
-      }}
-    >
-    <div
-      className="w-[320px] h-full border-l border-white/[0.06] bg-black/20 overflow-hidden flex flex-col"
-      style={{
-        transform: open ? "translateX(0)" : "translateX(16px)",
         opacity: open ? 1 : 0,
         transition:
-          "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease",
+          "width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
       }}
     >
       <div className="px-3 py-2.5 border-b border-white/[0.06] flex-shrink-0">
@@ -278,7 +266,6 @@ function FieldRail({ item, open }) {
           </div>
         ))}
       </div>
-    </div>
     </div>
   );
 }

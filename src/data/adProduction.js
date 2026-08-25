@@ -14,21 +14,21 @@ export const AD_PHASES = [
 // Full column set — every field the local monday.com snapshot carries is a
 // real column, visible by default. Hide/reorder via the Columns picker.
 export const AD_BOARD_COLUMNS = [
-  { id: "item", label: "Item", width: 110, pinned: true, hideable: false },
-  { id: "status", label: "Status", width: 152 },
-  { id: "product", label: "Product", width: 130 },
-  { id: "priority", label: "Priority", width: 92 },
-  { id: "editor", label: "Editor", width: 106 },
-  { id: "angle", label: "Angle", width: 112 },
-  { id: "due", label: "Due", width: 76 },
-  { id: "style", label: "Style", width: 120 },
-  { id: "platform", label: "Platform", width: 100 },
-  { id: "painPoint", label: "Pain Point", width: 124 },
-  { id: "strategist", label: "Strategist", width: 106 },
-  { id: "sendDate", label: "Send Date", width: 84 },
-  { id: "performance", label: "Performance", width: 100 },
-  { id: "summary", label: "Summary", width: 100 },
-  { id: "adCopy", label: "Ad Copy", width: 300 },
+  { id: "item", label: "Item", width: 228, minWidth: 168, pinned: true, hideable: false },
+  { id: "status", label: "Status", width: 172, minWidth: 128 },
+  { id: "product", label: "Product", width: 156, minWidth: 112 },
+  { id: "priority", label: "Priority", width: 118, minWidth: 96 },
+  { id: "editor", label: "Editor", width: 124, minWidth: 96 },
+  { id: "angle", label: "Angle", width: 136, minWidth: 100 },
+  { id: "due", label: "Due", width: 92, minWidth: 76 },
+  { id: "style", label: "Style", width: 144, minWidth: 108 },
+  { id: "platform", label: "Platform", width: 116, minWidth: 96 },
+  { id: "painPoint", label: "Pain Point", width: 148, minWidth: 112 },
+  { id: "strategist", label: "Strategist", width: 124, minWidth: 96 },
+  { id: "sendDate", label: "Send Date", width: 100, minWidth: 84 },
+  { id: "performance", label: "Performance", width: 128, minWidth: 108 },
+  { id: "summary", label: "Summary", width: 112, minWidth: 88 },
+  { id: "adCopy", label: "Ad Copy", width: 280, minWidth: 140 },
 ];
 
 // Label→color maps mirrored from the live monday.com board's dropdowns.
