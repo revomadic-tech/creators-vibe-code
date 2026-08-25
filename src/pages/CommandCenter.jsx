@@ -613,7 +613,7 @@ export default function CommandCenter() {
     <div className="h-full flex flex-col min-h-0">
       <div className="h-full px-6 pb-16 pt-16 fade-in flex flex-col min-h-0">
         <div className="flex-1 min-h-0 flex gap-3 lg:overflow-x-auto lg:overflow-y-hidden">
-          <StaffPanel className="hidden lg:flex w-[320px] xl:w-[345px] flex-shrink-0" />
+          <StaffPanel className="hidden lg:flex flex-shrink-0" />
 
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
             <div className="flex items-end justify-between gap-3 mb-2.5 flex-shrink-0">

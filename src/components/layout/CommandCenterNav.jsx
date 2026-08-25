@@ -5,19 +5,14 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Clock,
   Mail,
   MapPin,
-  Pause,
-  Play,
   Settings,
-  User as UserIcon,
 } from "lucide-react";
 import { currentUser, notifications } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
 import { AnimatedPopover } from "./OverlayPanel";
 import {
-  myTimeTracking,
   timeOffBalance,
   timeOffRequests as seedRequests,
 } from "../../data/staffPanel";
@@ -32,14 +27,6 @@ const STATUS_STYLE = {
 
 function firstName(name) {
   return (name || "").split(" ")[0] || name;
-}
-
-function fmtMinutes(min) {
-  if (!min) return "0m";
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  if (h <= 0) return `${m}m`;
-  return `${h}h ${m}m`;
 }
 
 function formatRange(start, end) {
@@ -85,7 +72,6 @@ export default function CommandCenterNav() {
   const navRef = useRef(null);
   const { setOpen, isOpenVisual } = useCommandCenter();
   const [panel, setPanel] = useState(null);
-  const [clockedIn, setClockedIn] = useState(true);
   const [requests, setRequests] = useState(seedRequests);
   const [ptoType, setPtoType] = useState("Vacation");
   const [ptoStart, setPtoStart] = useState("");
@@ -166,25 +152,26 @@ export default function CommandCenterNav() {
           <ChevronUp size={11} strokeWidth={2.6} className="text-white/30 -mb-0.5" />
           <ChevronDown size={11} strokeWidth={2.6} />
         </button>
-        <div className="flex items-center gap-2 pl-0.5 pr-1.5 flex-shrink-0">
-          <img
-            src={currentUser.avatar}
-            alt={currentUser.name}
-            className="w-8 h-8 rounded-full object-cover border border-white/[0.08]"
-          />
-          <div className="leading-tight pr-1 hidden sm:block">
-            <p className="text-[11px] font-semibold text-white">{firstName(currentUser.name)}</p>
-            <p className="text-[9px] text-white/35">Command Center</p>
-          </div>
-        </div>
-
         <button
           type="button"
           onClick={() => togglePanel("profile")}
-          className={navChip(panel === "profile")}
+          aria-label="Open profile"
+          aria-expanded={panel === "profile"}
+          className={`flex items-center gap-2 pl-0.5 pr-2 py-0.5 rounded-full flex-shrink-0 transition-all duration-200 ${
+            panel === "profile"
+              ? "bg-white/[0.12]"
+              : "hover:bg-white/[0.06]"
+          }`}
         >
-          <UserIcon size={14} strokeWidth={panel === "profile" ? 2.2 : 1.5} />
-          Profile
+          <img
+            src={currentUser.avatar}
+            alt=""
+            className="w-8 h-8 rounded-full object-cover border border-white/[0.08]"
+          />
+          <div className="leading-tight pr-1 hidden sm:block text-left">
+            <p className="text-[11px] font-semibold text-white">{firstName(currentUser.name)}</p>
+            <p className="text-[9px] text-white/35">Command Center</p>
+          </div>
         </button>
         <button
           type="button"
@@ -205,26 +192,6 @@ export default function CommandCenterNav() {
         </div>
 
         <div className="flex items-center gap-0.5 flex-shrink-0">
-        <button
-          type="button"
-          onClick={() => {
-            setClockedIn((v) => !v);
-            setPanel(null);
-          }}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all duration-200 ${
-            clockedIn
-              ? "bg-accent-teal/10 text-accent-teal border border-accent-teal/20"
-              : "text-white/45 hover:text-white hover:bg-white/[0.06]"
-          }`}
-          aria-label={clockedIn ? "Clock out" : "Clock in"}
-        >
-          {clockedIn ? <Pause size={11} /> : <Play size={11} />}
-          <span className="font-mono">{fmtMinutes(myTimeTracking.todayMinutes)}</span>
-          <span className="text-[9px] font-medium opacity-70 hidden md:inline">
-            {clockedIn ? "tracking" : "clocked out"}
-          </span>
-        </button>
-
         <button
           type="button"
           onClick={() => togglePanel("alerts")}
@@ -264,12 +231,6 @@ export default function CommandCenterNav() {
               <span>
                 {currentUser.workspace}
                 {currentUser.timezone ? ` · ${currentUser.timezone}` : ""}
-              </span>
-            </div>
-            <div className="flex items-center gap-2.5 text-[12px] text-white/65">
-              <Clock size={13} className="text-white/30 flex-shrink-0" />
-              <span>
-                {clockedIn ? "Clocked in" : "Clocked out"} · {fmtMinutes(myTimeTracking.todayMinutes)} today
               </span>
             </div>
           </dl>

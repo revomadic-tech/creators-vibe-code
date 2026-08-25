@@ -4,9 +4,9 @@ import {
   AtSign,
   ChevronDown,
   ChevronRight,
-  FilePenLine,
   Hash,
   MessageSquare,
+  PanelLeftClose,
   Paperclip,
   PenSquare,
   Search,
@@ -31,7 +31,6 @@ const FILTERS = [
   { key: "all", label: "All" },
   { key: "activity", label: "Activity" },
   { key: "unread", label: "Unread" },
-  { key: "drafts", label: "Drafts" },
 ];
 
 const ACTIVITY_KIND = {
@@ -237,12 +236,11 @@ function ConversationList({
   onSelect,
   onNew,
   activityUnread,
-  draftCount,
 }) {
   const [openSections, setOpenSections] = useState({
-    channel: true,
-    group: true,
-    dm: true,
+    channel: false,
+    group: false,
+    dm: false,
   });
 
   const q = search.trim().toLowerCase();
@@ -252,7 +250,6 @@ function ConversationList({
       return false;
     }
     if (filter === "unread") return c.unread > 0;
-    if (filter === "drafts") return !!c.draft;
     return true;
   });
 
@@ -299,14 +296,11 @@ function ConversationList({
                       ? "bg-rose-500 text-white"
                       : f.key === "activity"
                         ? "bg-violet-600 text-white"
-                        : f.key === "drafts"
-                          ? "bg-amber-600 text-white"
-                          : "bg-white/15 text-white"
+                        : "bg-white/15 text-white"
                     : "bg-white/[0.04] text-white/40 hover:text-white/70 border border-white/[0.08]"
                 }`}
               >
                 {f.key === "activity" && <AtSign size={10} />}
-                {f.key === "drafts" && <FilePenLine size={10} />}
                 {f.label}
                 {f.key === "unread" && totalUnread > 0 && !active && (
                   <span className="tabular-nums opacity-80">{totalUnread}</span>
@@ -315,9 +309,6 @@ function ConversationList({
                   <span className="tabular-nums opacity-80">
                     {activityUnread > 9 ? "9+" : activityUnread}
                   </span>
-                )}
-                {f.key === "drafts" && draftCount > 0 && !active && (
-                  <span className="tabular-nums opacity-80">{draftCount}</span>
                 )}
               </button>
             );
@@ -373,9 +364,7 @@ function ConversationList({
             <p className="px-3 py-10 text-center text-[12px] text-white/35">
               {filter === "unread"
                 ? "No unread conversations"
-                : filter === "drafts"
-                  ? "No drafts — start typing in a chat to save one"
-                  : "No conversations match"}
+                : "No conversations match"}
             </p>
           )}
           {channels.length > 0 && (
@@ -627,10 +616,74 @@ function NewConversation({ conversations, onClose, onPick }) {
   );
 }
 
+function CollapsedRail({
+  conversations,
+  activityUnread,
+  onExpand,
+  onSelect,
+  onActivity,
+}) {
+  const unread = conversations.filter((c) => c.unread > 0);
+  const totalUnread = unread.reduce((n, c) => n + (c.unread || 0), 0);
+
+  return (
+    <div className="flex h-full w-full flex-col items-center py-2 gap-0.5">
+      <button
+        type="button"
+        onClick={onExpand}
+        title="Open chat"
+        aria-label="Open team chat"
+        className="relative w-10 h-10 rounded-xl flex items-center justify-center text-[#E8C4A0] hover:bg-white/[0.08] transition-colors"
+      >
+        <MessageSquare size={16} />
+        {totalUnread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8C4A0] px-0.5 text-[9px] font-bold text-[#191e29]">
+            {totalUnread > 9 ? "9+" : totalUnread}
+          </span>
+        )}
+      </button>
+      <div className="w-6 h-px bg-white/10 my-1.5" />
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5 w-full px-1.5">
+        {unread.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onSelect(c.id)}
+            title={conversationTitle(c)}
+            aria-label={`${conversationTitle(c)}${c.unread ? `, ${c.unread} unread` : ""}`}
+            className="relative w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white/[0.08] transition-colors"
+          >
+            <ConvAvatar conv={c} size="xs" />
+            {c.unread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent-red px-0.5 text-[8px] font-bold text-white">
+                {c.unread > 9 ? "9+" : c.unread}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      {activityUnread > 0 && (
+        <button
+          type="button"
+          onClick={onActivity}
+          title="Mentions"
+          aria-label={`${activityUnread} unread mentions`}
+          className="relative w-10 h-10 rounded-xl flex items-center justify-center text-violet-300 hover:bg-white/[0.08] mb-1 transition-colors"
+        >
+          <AtSign size={15} />
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-violet-500 px-0.5 text-[8px] font-bold text-white">
+            {activityUnread > 9 ? "9+" : activityUnread}
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
- * Team Chat pane — sits under the staff time snapshot inside StaffPanel.
+ * Team Chat pane — notification rail when collapsed, conversation list when open.
  */
-export default function TeamChat() {
+export default function TeamChat({ collapsed = false, onExpand, onCollapse }) {
   const [conversations, setConversations] = useState(teamChatSeed.conversations);
   const [messagesById, setMessagesById] = useState(teamChatSeed.messages);
   const [activity, setActivity] = useState(teamChatSeed.activity);
@@ -651,7 +704,6 @@ export default function TeamChat() {
   const active = conversations.find((c) => c.id === activeId) || null;
   const messages = (activeId && messagesById[activeId]) || [];
   const activityUnread = activity.filter((a) => a.unread).length;
-  const draftCount = conversations.filter((c) => c.draft).length;
 
   const openChat = (id) => {
     setActiveId(id);
@@ -731,6 +783,35 @@ export default function TeamChat() {
   const iconBtn =
     "shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-stone-400 hover:text-[#F7F5F2] hover:bg-white/10";
 
+  const pickFromRail = (id) => {
+    onExpand?.();
+    openChat(id);
+  };
+
+  const openActivityFromRail = () => {
+    onExpand?.();
+    setShowChat(false);
+    setActiveId(null);
+    setFilter("activity");
+  };
+
+  if (collapsed) {
+    return (
+      <div
+        data-page-demo="command-team-chat"
+        className="relative flex-1 min-h-0 flex flex-col overflow-hidden"
+      >
+        <CollapsedRail
+          conversations={conversations}
+          activityUnread={activityUnread}
+          onExpand={onExpand}
+          onSelect={pickFromRail}
+          onActivity={openActivityFromRail}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-page-demo="command-team-chat"
@@ -773,6 +854,17 @@ export default function TeamChat() {
             className="w-full h-7 pl-7 pr-3 rounded-full bg-white/10 border border-white/10 text-[11px] text-[#F7F5F2] placeholder:text-stone-500 outline-none focus:border-[#E8C4A0]/40"
           />
         </div>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            title="Collapse chat"
+            aria-label="Collapse chat"
+            className={iconBtn}
+          >
+            <PanelLeftClose size={14} />
+          </button>
+        )}
       </div>
 
       <div className="relative flex-1 min-h-0 flex">
@@ -797,7 +889,6 @@ export default function TeamChat() {
               activeId={activeId}
               activity={activity}
               activityUnread={activityUnread}
-              draftCount={draftCount}
               onFilter={setFilter}
               onSelect={openChat}
               onNew={() => setNewOpen(true)}
