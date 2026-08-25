@@ -8,7 +8,6 @@ import {
   FolderOpen,
   Inbox,
   PanelLeftClose,
-  PanelLeftOpen,
   Upload,
   Star,
   Package,
@@ -28,8 +27,7 @@ export default function FolderTree({
   typeIcons,
   selectedId,
   onSelect,
-  collapsed,
-  onToggleCollapsed,
+  onHide,
 }) {
   const tree = useMemo(
     () =>
@@ -45,9 +43,7 @@ export default function FolderTree({
     [assets, products, partners, categories, assetTypes, briefs, typeIcons]
   );
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState(() =>
-    new Set(tree.filter((n) => n.children?.length).map((n) => n.id))
-  );
+  const [expanded, setExpanded] = useState(() => new Set());
 
   const visibleTree = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -73,23 +69,6 @@ export default function FolderTree({
     });
   };
 
-  if (collapsed) {
-    return (
-      <aside className="w-11 h-full flex-shrink-0 border-r border-white/[0.06] bg-black/20 flex flex-col items-center py-3 gap-2">
-        <button
-          onClick={onToggleCollapsed}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-all duration-200"
-          title="Expand library"
-        >
-          <PanelLeftOpen size={15} />
-        </button>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20">
-          <Folder size={15} />
-        </div>
-      </aside>
-    );
-  }
-
   return (
     <aside className="w-[232px] h-full flex-shrink-0 border-r border-white/[0.06] bg-black/25 flex flex-col min-h-0 overflow-hidden">
       <div className="px-3 pt-3 pb-2.5 border-b border-white/[0.04] flex-shrink-0">
@@ -98,9 +77,9 @@ export default function FolderTree({
             Library
           </p>
           <button
-            onClick={onToggleCollapsed}
+            onClick={onHide}
             className="p-1 rounded-md text-white/20 hover:text-white/50 hover:bg-white/[0.05] transition-all duration-200"
-            title="Collapse library"
+            title="Hide library"
           >
             <PanelLeftClose size={13} />
           </button>
@@ -128,7 +107,7 @@ export default function FolderTree({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scroll py-1.5 px-1.5">
+      <div className="flex-1 overflow-y-auto custom-scroll py-2 px-2">
         {visibleTree.map((node) => (
           <TreeNode
             key={node.id}
@@ -177,7 +156,7 @@ function TreeNode({ node, depth, selectedId, expanded, onToggle, onSelect }) {
             ? "bg-white/[0.08] text-white"
             : "text-white/45 hover:text-white/80 hover:bg-white/[0.04]"
         }`}
-        style={{ paddingLeft: 6 + depth * 12 }}
+        style={{ paddingLeft: 8 + depth * 12 }}
       >
         {hasChildren ? (
           <span className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center text-white/25">

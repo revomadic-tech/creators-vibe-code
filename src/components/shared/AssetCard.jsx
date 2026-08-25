@@ -19,6 +19,30 @@ const typeColors = {
   Illustration: "bg-accent-orange",
 };
 
+const TYPE_DEFAULT_EXT = {
+  Photo: ".jpg",
+  Video: ".mp4",
+  Graphic: ".psd",
+  Motion: ".mov",
+  "3D Render": ".exr",
+  Illustration: ".ai",
+};
+
+function fileExtLabel(asset) {
+  const ext = asset.fileExt || TYPE_DEFAULT_EXT[asset.type] || ".bin";
+  return ext.startsWith(".") ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+}
+
+function FileExtBadge({ asset, className = "" }) {
+  return (
+    <span
+      className={`px-1.5 py-0.5 bg-black/50 backdrop-blur-md rounded text-[8px] font-semibold text-white/70 font-mono tracking-wide ${className}`}
+    >
+      {fileExtLabel(asset)}
+    </span>
+  );
+}
+
 export default function AssetCard({
   asset,
   onClick,
@@ -56,9 +80,7 @@ export default function AssetCard({
             </div>
 
             <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between">
-              <span className="px-1.5 py-0.5 bg-black/50 backdrop-blur-md rounded text-[8px] font-semibold text-white/70 uppercase tracking-wider">
-                {asset.type}
-              </span>
+              <FileExtBadge asset={asset} />
               <div className="flex items-center gap-1">
                 {asset.editorNeeded && (
                   <span className="px-1.5 py-0.5 bg-accent-orange/90 backdrop-blur-md rounded text-[8px] font-bold text-white flex items-center gap-0.5">
@@ -106,44 +128,52 @@ export default function AssetCard({
         )}
       </div>
 
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-1.5 mb-1.5">
+      <div className={isCompact ? "px-2 py-1.5" : "p-3"}>
+        <div className={`flex items-start justify-between gap-1.5 ${isCompact ? "" : "mb-1.5"}`}>
           <h3 className="text-[11px] font-semibold text-white leading-tight line-clamp-1">
             {asset.title}
           </h3>
-          <StatusBadge status={asset.status} small />
+          {!isCompact && <StatusBadge status={asset.status} small />}
         </div>
 
-        <div className="flex items-center gap-1 text-[10px] text-white/30 leading-none mb-1.5">
-          <span className="font-medium text-white/50">{asset.product}</span>
-          <span className="text-white/12">·</span>
-          <span>{asset.partner}</span>
-          <span className="text-white/12">·</span>
-          <span className="text-white/20">{asset.category}</span>
+        <div className={`flex items-center gap-1 text-[10px] text-white/30 leading-none ${isCompact ? "mt-0.5" : "mb-1.5"}`}>
+          <span className="font-medium text-white/50 truncate">{asset.product}</span>
+          {!isCompact && (
+            <>
+              <span className="text-white/12">·</span>
+              <span>{asset.partner}</span>
+              <span className="text-white/12">·</span>
+              <span className="text-white/20">{asset.category}</span>
+            </>
+          )}
         </div>
 
-        {asset.briefTitle && (
-          <div className="flex items-center gap-1 mb-2">
-            <FileText size={8} className="text-accent-red/50 flex-shrink-0" />
-            <span className="text-[9px] text-accent-red/60 truncate font-medium">
-              {asset.briefTitle}
-            </span>
-          </div>
+        {!isCompact && (
+          <>
+            {asset.briefTitle && (
+              <div className="flex items-center gap-1 mb-2">
+                <FileText size={8} className="text-accent-red/50 flex-shrink-0" />
+                <span className="text-[9px] text-accent-red/60 truncate font-medium">
+                  {asset.briefTitle}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+              <div className="flex items-center gap-1.5">
+                <img
+                  src={asset.editorAvatar}
+                  alt=""
+                  className="w-4 h-4 rounded-full object-cover ring-1 ring-white/[0.06]"
+                />
+                <span className="text-[10px] text-white/35">{asset.editor}</span>
+              </div>
+              <span className="text-[9px] text-white/18 font-mono">
+                {asset.dateSubmitted}
+              </span>
+            </div>
+          </>
         )}
-
-        <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
-          <div className="flex items-center gap-1.5">
-            <img
-              src={asset.editorAvatar}
-              alt=""
-              className="w-4 h-4 rounded-full object-cover ring-1 ring-white/[0.06]"
-            />
-            <span className="text-[10px] text-white/35">{asset.editor}</span>
-          </div>
-          <span className="text-[9px] text-white/18 font-mono">
-            {asset.dateSubmitted}
-          </span>
-        </div>
       </div>
     </div>
   );
@@ -166,9 +196,7 @@ function AssetHero({ asset, onClick }) {
 
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 bg-black/50 backdrop-blur-md rounded-md text-[9px] font-semibold text-white/70 uppercase tracking-wider">
-              {asset.type}
-            </span>
+            <FileExtBadge asset={asset} className="rounded-md text-[9px]" />
             {asset.isNew && (
               <span className="px-2 py-0.5 bg-accent-red/90 rounded-md text-[9px] font-bold text-white uppercase">
                 New
@@ -265,9 +293,7 @@ function AssetCinematic({ asset, onClick }) {
 
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className="px-1.5 py-0.5 bg-black/50 backdrop-blur rounded text-[8px] font-semibold text-white/60 uppercase">
-              {asset.type}
-            </span>
+            <FileExtBadge asset={asset} className="text-white/60" />
             <StatusBadge status={asset.status} small />
           </div>
           <h3 className="text-sm font-bold text-white leading-tight mb-1">
@@ -308,9 +334,7 @@ function AssetMini({ asset, onClick }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <div className="absolute top-2 left-2 flex items-center gap-1">
-          <span className="px-1.5 py-0.5 bg-black/50 backdrop-blur-md rounded text-[8px] font-semibold text-white/70 uppercase">
-            {asset.type}
-          </span>
+          <FileExtBadge asset={asset} />
           {asset.isNew && (
             <span className="px-1 py-0.5 bg-accent-red/90 rounded text-[7px] font-bold text-white">
               NEW
@@ -383,9 +407,7 @@ function AssetFeatured({ asset, onClick }) {
                 New
               </span>
             )}
-            <span className="px-1.5 py-0.5 bg-black/40 backdrop-blur rounded text-[8px] text-white/60 uppercase">
-              {asset.type}
-            </span>
+            <FileExtBadge asset={asset} className="bg-black/40 text-white/60" />
           </div>
           <div className="card-quick-actions flex items-center gap-0.5">
             <button
@@ -447,8 +469,8 @@ function AssetListRow({ asset, onClick }) {
           {asset.title}
         </p>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[9px] text-white/20 uppercase font-medium">
-            {asset.type}
+          <span className="text-[9px] text-white/20 font-mono font-medium">
+            {fileExtLabel(asset)}
           </span>
           {asset.briefTitle && (
             <span className="text-[9px] text-accent-red/50 truncate max-w-[120px]">

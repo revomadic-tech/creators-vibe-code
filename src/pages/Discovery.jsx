@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import {
   Search,
   Grid3X3,
-  LayoutGrid,
   Rows3,
   Video,
   Palette,
@@ -18,9 +17,7 @@ import {
   Check,
   ArrowUpDown,
   ChevronDown,
-  TrendingUp,
   Upload,
-  Command,
   ArrowRight,
   ArrowLeft,
   Package,
@@ -29,6 +26,7 @@ import {
   Users,
   BarChart3,
   Image,
+  PanelLeftOpen,
 } from "lucide-react";
 import DetailPanel from "../components/layout/DetailPanel";
 import AssetCard from "../components/shared/AssetCard";
@@ -67,38 +65,24 @@ const sortOptions = [
 export default function Discovery() {
   const [searchParams] = useSearchParams();
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [typeFilters, setTypeFilters] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [partnerFilter, setPartnerFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [layout, setLayout] = useState("masonry");
+  const [layout, setLayout] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [activeProduct, setActiveProduct] = useState(null);
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [folderMeta, setFolderMeta] = useState(null);
-  const [folderCollapsed, setFolderCollapsed] = useState(false);
-  const searchRef = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  const [folderHidden, setFolderHidden] = useState(true);
 
   useEffect(() => {
     const product = searchParams.get("product");
     const partner = searchParams.get("partner");
     const status = searchParams.get("status");
-    const q = searchParams.get("q");
     const assetId = searchParams.get("assetId");
 
     if (product) {
@@ -110,7 +94,6 @@ export default function Discovery() {
       setSelectedFolderId(`partner:${partner}`);
     }
     if (status) setStatusFilter(status);
-    if (q) setSearchQuery(q);
     if (product || partner || status) setShowFilters(true);
 
     if (assetId) {
@@ -121,22 +104,7 @@ export default function Discovery() {
 
   const filteredAssets = useMemo(() => {
     let result = [...assets].filter((a) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (
-          ![
-            a.title,
-            a.product,
-            a.partner,
-            a.editor,
-            a.category,
-            a.type,
-            a.briefTitle || "",
-          ].some((f) => f.toLowerCase().includes(q))
-        )
-          return false;
-      }
-      if (typeFilter !== "all" && a.type !== typeFilter) return false;
+      if (typeFilters.length && !typeFilters.includes(a.type)) return false;
       if (statusFilter && a.status !== statusFilter) return false;
       if (productFilter && a.product !== productFilter) return false;
       if (partnerFilter && a.partner !== partnerFilter) return false;
@@ -165,8 +133,7 @@ export default function Discovery() {
     }
     return result;
   }, [
-    searchQuery,
-    typeFilter,
+    typeFilters,
     statusFilter,
     productFilter,
     partnerFilter,
@@ -176,20 +143,15 @@ export default function Discovery() {
   ]);
 
   const newAssets = useMemo(() => assets.filter((a) => a.isNew), []);
-  const featuredAssets = useMemo(
-    () => assets.filter((a) => a.isFeatured).slice(0, 8),
-    []
-  );
   const hasActiveFilters =
-    typeFilter !== "all" ||
+    typeFilters.length > 0 ||
     statusFilter ||
     productFilter ||
     partnerFilter ||
     categoryFilter ||
-    searchQuery ||
     folderMeta;
   const activeFilterCount = [
-    typeFilter !== "all",
+    typeFilters.length > 0,
     statusFilter,
     productFilter,
     partnerFilter,
@@ -200,7 +162,7 @@ export default function Discovery() {
   const handleSelectFolder = useCallback((node) => {
     if (node.kind === "group") return;
     setSelectedFolderId(node.id);
-    setTypeFilter("all");
+    setTypeFilters([]);
     setProductFilter("");
     setPartnerFilter("");
     setCategoryFilter("");
@@ -209,7 +171,7 @@ export default function Discovery() {
     if (node.kind === "product") setProductFilter(node.value);
     else if (node.kind === "partner") setPartnerFilter(node.value);
     else if (node.kind === "category") setCategoryFilter(node.value);
-    else if (node.kind === "type") setTypeFilter(node.value);
+    else if (node.kind === "type") setTypeFilters([node.value]);
     else if (node.kind === "campaign")
       setFolderMeta({ briefTitle: node.value });
     else if (node.kind === "new") setFolderMeta({ isNew: true });
@@ -217,8 +179,7 @@ export default function Discovery() {
   }, []);
 
   const clearAll = useCallback(() => {
-    setSearchQuery("");
-    setTypeFilter("all");
+    setTypeFilters([]);
     setStatusFilter("");
     setProductFilter("");
     setPartnerFilter("");
@@ -237,23 +198,21 @@ export default function Discovery() {
           onBack={() => setActiveProduct(null)}
           onAssetClick={setSelectedAsset}
         />
-        <DetailPanel
-          item={selectedAsset}
-          type="asset"
-          onClose={() => setSelectedAsset(null)}
-          relatedAssets={
-            selectedAsset
-              ? assets
-                  .filter(
-                    (a) =>
-                      a.id !== selectedAsset.id &&
-                      a.product === selectedAsset.product
-                  )
-                  .slice(0, 4)
-              : []
-          }
-          onSelectRelated={setSelectedAsset}
-        />
+        {selectedAsset && (
+          <DetailPanel
+            item={selectedAsset}
+            type="asset"
+            onClose={() => setSelectedAsset(null)}
+            relatedAssets={assets
+              .filter(
+                (a) =>
+                  a.id !== selectedAsset.id &&
+                  a.product === selectedAsset.product
+              )
+              .slice(0, 4)}
+            onSelectRelated={setSelectedAsset}
+          />
+        )}
       </>
     );
   }
@@ -262,94 +221,91 @@ export default function Discovery() {
     <>
       <div className="flex-1 overflow-hidden flex flex-col" id="discovery-scroll">
         <div className="fade-in pt-14 flex-1 flex overflow-hidden min-h-0">
-          <FolderTree
-            assets={assets}
-            products={products}
-            partners={partners}
-            categories={categories}
-            assetTypes={assetTypes}
-            briefs={briefs}
-            typeIcons={typeIcons}
-            selectedId={selectedFolderId}
-            onSelect={handleSelectFolder}
-            collapsed={folderCollapsed}
-            onToggleCollapsed={() => setFolderCollapsed((c) => !c)}
-          />
+          {!folderHidden && (
+            <FolderTree
+              assets={assets}
+              products={products}
+              partners={partners}
+              categories={categories}
+              assetTypes={assetTypes}
+              briefs={briefs}
+              typeIcons={typeIcons}
+              selectedId={selectedFolderId}
+              onSelect={handleSelectFolder}
+              onHide={() => setFolderHidden(true)}
+            />
+          )}
           <div className="flex-1 min-w-0 overflow-y-auto">
+            {!hasActiveFilters && (
+            <div className="px-6">
+              {/* Just Landed — above library filters */}
+              {newAssets.length > 0 && (
+                <div className="mb-6 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center w-5 h-5 rounded-md bg-accent-red/12">
+                        <Upload size={10} className="text-accent-red" />
+                      </div>
+                      <h3 className="text-[11px] font-bold text-white uppercase tracking-wider">
+                        Just Landed
+                      </h3>
+                      <span className="text-[10px] text-accent-red/60 font-mono">
+                        {newAssets.length} new
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-white/12 font-mono">
+                      Last 72 hours
+                    </span>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+                    {newAssets.slice(0, 8).map((asset) => (
+                      <AssetCard
+                        key={asset.id}
+                        asset={asset}
+                        onClick={setSelectedAsset}
+                        variant="featured"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Product collections — above command bar */}
+              <div className="mb-6">
+                <ProductCollectionSlider onSelectProduct={setActiveProduct} />
+              </div>
+            </div>
+            )}
+
             {/* Command Bar */}
             <div className="sticky top-0 z-20 command-bar px-6 py-3">
             <div>
-              {/* Search */}
-              <div className="relative group/search mb-2.5">
-                <Search
-                  size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20 group-focus-within/search:text-accent-red/60 transition-colors"
-                />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search 31,247 assets — names, products, partners, editors, briefs..."
-                  className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl py-2.5 pl-10 pr-20 text-[13px] text-white placeholder:text-white/20 outline-none focus:border-accent-red/25 focus:bg-white/[0.06] transition-all duration-200"
-                />
-                {searchQuery ? (
+              <div className="flex items-center gap-2.5 flex-nowrap">
+                {folderHidden && (
                   <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-white/20 hover:text-white/50 transition-colors"
+                    type="button"
+                    onClick={() => setFolderHidden(false)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.05] text-white/35 hover:text-white/55 hover:border-white/[0.08] text-[13px] font-medium transition-all duration-200"
+                    title="Show library"
                   >
-                    <X size={14} />
+                    <PanelLeftOpen size={13} />
+                    <span className="hidden xl:inline">Library</span>
                   </button>
-                ) : (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.04] rounded text-white/15">
-                    <Command size={10} />
-                    <span className="text-[10px] font-mono">K</span>
-                  </div>
                 )}
-              </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <div className="flex items-center bg-white/[0.03] border border-white/[0.04] rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => {
-                      setTypeFilter("all");
-                      if (selectedFolderId.startsWith("type:"))
-                        setSelectedFolderId("all");
-                    }}
-                    className={`flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium transition-all duration-200 ${
-                      typeFilter === "all"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-white/30 hover:text-white/50 hover:bg-white/[0.03]"
-                    }`}
-                  >
-                    <Sparkles size={12} />
-                    <span className="hidden xl:inline">All</span>
-                  </button>
-                  {assetTypes.map((t) => {
-                    const Icon = typeIcons[t] || Sparkles;
-                    return (
-                      <button
-                        key={t}
-                        onClick={() =>
-                          setTypeFilter(typeFilter === t ? "all" : t)
-                        }
-                        className={`flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium transition-all duration-200 ${
-                          typeFilter === t
-                            ? "bg-white/[0.08] text-white"
-                            : "text-white/30 hover:text-white/50 hover:bg-white/[0.03]"
-                        }`}
-                      >
-                        <Icon size={12} />
-                        <span className="hidden xl:inline">{t}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <TypeMultiSelect
+                  values={typeFilters}
+                  options={assetTypes}
+                  onChange={(next) => {
+                    setTypeFilters(next);
+                    if (selectedFolderId.startsWith("type:"))
+                      setSelectedFolderId("all");
+                  }}
+                />
 
                 {/* Filter toggle */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 ${
+                  className={`relative flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 ${
                     showFilters
                       ? "bg-white/[0.08] text-white border border-white/[0.1]"
                       : "bg-white/[0.04] border border-white/[0.05] text-white/35 hover:text-white/55 hover:border-white/[0.08]"
@@ -364,10 +320,10 @@ export default function Discovery() {
                 </button>
 
                 {/* Sort */}
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                   <button
                     onClick={() => setShowSortMenu(!showSortMenu)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.04] border border-white/[0.05] rounded-xl text-[11px] text-white/35 hover:text-white/55 hover:border-white/[0.08] transition-all duration-200"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.04] border border-white/[0.05] rounded-xl text-[13px] text-white/35 hover:text-white/55 hover:border-white/[0.08] transition-all duration-200"
                   >
                     <ArrowUpDown size={12} /> {currentSort?.label}{" "}
                     <ChevronDown size={10} />
@@ -407,9 +363,8 @@ export default function Discovery() {
                 </div>
 
                 {/* Layout */}
-                <div className="flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.04] rounded-xl p-0.5">
+                <div className="flex-shrink-0 flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.04] rounded-xl p-0.5">
                   {[
-                    { v: "masonry", i: LayoutGrid },
                     { v: "grid", i: Grid3X3 },
                     { v: "list", i: Rows3 },
                   ].map((l) => (
@@ -478,22 +433,17 @@ export default function Discovery() {
             {/* Active filter chips */}
             {hasActiveFilters && (
               <div className="flex items-center gap-1.5 pt-4 pb-4 flex-wrap">
-                {searchQuery && (
+                {typeFilters.map((t) => (
                   <ActiveChip
-                    label={`"${searchQuery}"`}
-                    onRemove={() => setSearchQuery("")}
-                  />
-                )}
-                {typeFilter !== "all" && (
-                  <ActiveChip
-                    label={typeFilter}
+                    key={t}
+                    label={t}
                     onRemove={() => {
-                      setTypeFilter("all");
+                      setTypeFilters(typeFilters.filter((v) => v !== t));
                       if (selectedFolderId.startsWith("type:"))
                         setSelectedFolderId("all");
                     }}
                   />
-                )}
+                ))}
                 {statusFilter && (
                   <ActiveChip
                     label={statusFilter}
@@ -560,78 +510,8 @@ export default function Discovery() {
               </div>
             )}
 
-            {/* Just Landed — always first when no filters */}
-            {!hasActiveFilters && newAssets.length > 0 && (
-              <div className="mb-6 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-md bg-accent-red/12">
-                      <Upload size={10} className="text-accent-red" />
-                    </div>
-                    <h3 className="text-[11px] font-bold text-white uppercase tracking-wider">
-                      Just Landed
-                    </h3>
-                    <span className="text-[10px] text-accent-red/60 font-mono">
-                      {newAssets.length} new
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-white/12 font-mono">
-                    Last 72 hours
-                  </span>
-                </div>
-                <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
-                  {newAssets.slice(0, 8).map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      onClick={setSelectedAsset}
-                      variant="featured"
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Product Collections — sliding viewer */}
-            {!hasActiveFilters && (
-              <div className="mb-8">
-                <ProductCollectionSlider
-                  onSelectProduct={setActiveProduct}
-                />
-              </div>
-            )}
-
-            {/* Trending */}
-            {!hasActiveFilters && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-md bg-accent-purple/12">
-                      <TrendingUp size={10} className="text-accent-purple" />
-                    </div>
-                    <h3 className="text-[11px] font-bold text-white uppercase tracking-wider">
-                      Trending
-                    </h3>
-                    <span className="text-[10px] text-white/12 font-mono">
-                      Most viewed this week
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
-                  {featuredAssets.map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      onClick={setSelectedAsset}
-                      variant="featured"
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Main Grid */}
-            <div className="pb-8">
+            <div className={`pb-8 ${hasActiveFilters ? "" : "pt-4"}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="text-xs font-bold text-white/35 uppercase tracking-wider">
@@ -643,13 +523,8 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {layout === "masonry" ? (
-                <StaggeredMasonry
-                  assets={filteredAssets}
-                  onSelect={setSelectedAsset}
-                />
-              ) : layout === "grid" ? (
-                <div className="grid grid-cols-4 gap-3">
+              {layout === "grid" ? (
+                <div className="grid grid-cols-10 gap-2 [&>*]:min-w-0">
                   {filteredAssets.map((asset) => (
                     <AssetCard
                       key={asset.id}
@@ -696,7 +571,7 @@ export default function Discovery() {
                     No assets match your criteria
                   </p>
                   <p className="text-xs text-white/12 mt-1 mb-3">
-                    Try adjusting your filters or search terms
+                    Try adjusting your filters
                   </p>
                   <button
                     onClick={clearAll}
@@ -722,72 +597,103 @@ export default function Discovery() {
         </div>
       </div>
 
-      <DetailPanel
-        item={selectedAsset}
-        type="asset"
-        onClose={() => setSelectedAsset(null)}
-        relatedAssets={
-          selectedAsset
-            ? assets
-                .filter(
-                  (a) =>
-                    a.id !== selectedAsset.id &&
-                    a.product === selectedAsset.product
-                )
-                .slice(0, 4)
-            : []
-        }
-        onSelectRelated={setSelectedAsset}
-      />
+      {selectedAsset && (
+        <DetailPanel
+          item={selectedAsset}
+          type="asset"
+          onClose={() => setSelectedAsset(null)}
+          relatedAssets={assets
+            .filter(
+              (a) =>
+                a.id !== selectedAsset.id &&
+                a.product === selectedAsset.product
+            )
+            .slice(0, 4)}
+          onSelectRelated={setSelectedAsset}
+        />
+      )}
     </>
   );
 }
 
-function StaggeredMasonry({ assets: items, onSelect }) {
-  const cols = 4;
-  const columns = Array.from({ length: cols }, () => []);
+function TypeMultiSelect({ values, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = values.length > 0;
 
-  items.forEach((asset, i) => {
-    const colIdx = i % cols;
-    const isHero = i === 0 || i === 7 || i === 18 || i === 33;
-    const isCinematic = i === 3 || i === 11 || i === 22 || i === 38;
-    columns[colIdx].push({ asset, isHero, isCinematic });
-  });
+  const toggle = (option) => {
+    if (values.includes(option)) {
+      onChange(values.filter((v) => v !== option));
+    } else {
+      onChange([...values, option]);
+    }
+  };
 
   return (
-    <div className="flex gap-3">
-      {columns.map((col, ci) => (
-        <div key={ci} className="flex-1 space-y-3">
-          {col.map(({ asset, isHero, isCinematic }) => {
-            if (isHero)
+    <div className="relative flex-shrink-0 z-50">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 ${
+          selected
+            ? "bg-white/[0.08] text-white border border-white/[0.1]"
+            : "bg-white/[0.04] border border-white/[0.05] text-white/35 hover:text-white/55 hover:border-white/[0.08]"
+        }`}
+      >
+        Type
+        {selected && (
+          <span className="w-4 h-4 bg-accent-red rounded-full text-[9px] font-bold text-white flex items-center justify-center leading-none">
+            {values.length}
+          </span>
+        )}
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-10 w-48 glass-panel rounded-xl shadow-2xl z-50 py-1 fade-in"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-all duration-150 ${
+                !selected
+                  ? "text-white bg-white/[0.04]"
+                  : "text-white/45 hover:text-white hover:bg-white/[0.03]"
+              }`}
+            >
+              <Sparkles size={12} /> All types
+              {!selected && (
+                <Check size={12} className="ml-auto text-accent-red" />
+              )}
+            </button>
+            {options.map((option) => {
+              const Icon = typeIcons[option] || Sparkles;
+              const isOn = values.includes(option);
               return (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  onClick={onSelect}
-                  variant="hero"
-                />
+                <button
+                  key={option}
+                  onClick={() => toggle(option)}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-all duration-150 ${
+                    isOn
+                      ? "text-white bg-white/[0.04]"
+                      : "text-white/45 hover:text-white hover:bg-white/[0.03]"
+                  }`}
+                >
+                  <Icon size={12} /> {option}
+                  {isOn && (
+                    <Check size={12} className="ml-auto text-accent-red" />
+                  )}
+                </button>
               );
-            if (isCinematic)
-              return (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  onClick={onSelect}
-                  variant="cinematic"
-                />
-              );
-            return (
-              <AssetCard
-                key={asset.id}
-                asset={asset}
-                onClick={onSelect}
-                variant="default"
-              />
-            );
-          })}
-        </div>
-      ))}
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -860,7 +766,7 @@ function ActiveChip({ label, onRemove }) {
   );
 }
 
-function ProductCollectionSlider({ onSelectProduct }) {
+function ProductCollectionSlider({ onSelectProduct, compact = false }) {
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -877,11 +783,16 @@ function ProductCollectionSlider({ onSelectProduct }) {
     if (!el) return;
     el.addEventListener("scroll", checkScroll, { passive: true });
     checkScroll();
-    return () => el.removeEventListener("scroll", checkScroll);
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", checkScroll);
+      ro.disconnect();
+    };
   }, [checkScroll]);
 
   const scroll = (dir) => {
-    scrollRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
+    scrollRef.current?.scrollBy({ left: dir * (compact ? 160 : 120), behavior: "smooth" });
   };
 
   return (
@@ -890,7 +801,9 @@ function ProductCollectionSlider({ onSelectProduct }) {
         <button
           type="button"
           onClick={() => scroll(-1)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center"
+          className={`absolute left-0 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center ${
+            compact ? "top-1/2 -translate-y-1/2" : "top-8 -translate-y-1/2"
+          }`}
           aria-label="Previous products"
         >
           <ArrowLeft size={12} />
@@ -900,7 +813,9 @@ function ProductCollectionSlider({ onSelectProduct }) {
         <button
           type="button"
           onClick={() => scroll(1)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center"
+          className={`absolute right-0 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center ${
+            compact ? "top-1/2 -translate-y-1/2" : "top-8 -translate-y-1/2"
+          }`}
           aria-label="Next products"
         >
           <ArrowRight size={12} />
@@ -909,44 +824,65 @@ function ProductCollectionSlider({ onSelectProduct }) {
 
       <div
         ref={scrollRef}
-        className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scroll-smooth"
+        className={`flex overflow-x-auto scroll-smooth ${
+          compact
+            ? "gap-1 items-center"
+            : "gap-5 pb-1 -mx-1 px-1"
+        }`}
         style={{ scrollbarWidth: "none" }}
       >
-        {revoProducts.map((product) => (
-          <button
-            key={product.id}
-            onClick={() => onSelectProduct(product)}
-            className="flex-shrink-0 w-[168px] group relative rounded-xl overflow-hidden glass-card cursor-pointer text-left"
-          >
-            <div className="relative h-[76px] overflow-hidden">
-              <img
-                src={product.thumbnail}
-                alt={product.name}
-                className="w-full h-full object-cover img-cinematic transition-transform duration-500 ease-out group-hover:scale-110"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-              <span
-                className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider text-white"
-                style={{ backgroundColor: `${product.color}cc` }}
-              >
-                {product.assetCount}
+        {revoProducts.map((product) =>
+          compact ? (
+            <button
+              key={product.id}
+              onClick={() => onSelectProduct(product)}
+              title={product.tagline}
+              className="flex-shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl hover:bg-white/[0.05] transition-all duration-200 group"
+            >
+              <span className="relative w-7 h-7 rounded-full bg-white overflow-hidden ring-1 ring-white/15 transition-transform duration-200 group-hover:scale-105 group-hover:ring-white/35">
+                <img
+                  src={product.thumbnail}
+                  alt={product.name}
+                  className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+                  loading="lazy"
+                />
               </span>
-              <div className="absolute bottom-1.5 left-2 right-2">
-                <h3 className="text-[12px] font-black text-white tracking-wide leading-none truncate">
+              <span className="text-[11px] font-bold text-white/70 group-hover:text-white tracking-wide leading-none whitespace-nowrap">
+                {product.name}
+              </span>
+            </button>
+          ) : (
+            <button
+              key={product.id}
+              onClick={() => onSelectProduct(product)}
+              title={product.tagline}
+              className="flex-shrink-0 w-[88px] group flex flex-col items-center gap-2 cursor-pointer"
+            >
+              <span className="relative w-[72px] h-[72px] rounded-full bg-white overflow-hidden ring-1 ring-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 group-hover:ring-white/35">
+                <img
+                  src={product.thumbnail}
+                  alt={product.name}
+                  className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+                  loading="lazy"
+                />
+                <span
+                  className="absolute bottom-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none"
+                  style={{ backgroundColor: product.color }}
+                >
+                  {product.assetCount}
+                </span>
+              </span>
+              <span className="w-full text-center">
+                <span className="block text-[11px] font-bold text-white tracking-wide leading-none truncate">
                   {product.name}
-                </h3>
-              </div>
-            </div>
-            <div className="px-2 py-1.5 flex items-center gap-1.5 border-t border-white/[0.04]">
-              <span className="text-[9px] text-white/40 truncate">{product.tagline}</span>
-              <ArrowRight
-                size={11}
-                className="ml-auto flex-shrink-0 text-white/15 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all duration-300"
-              />
-            </div>
-          </button>
-        ))}
+                </span>
+                <span className="block text-[9px] text-white/35 mt-1 truncate">
+                  {product.tagline}
+                </span>
+              </span>
+            </button>
+          )
+        )}
       </div>
     </div>
   );
@@ -998,12 +934,14 @@ function ProductFullPage({ product, onBack, onAssetClick }) {
     <div className="flex-1 overflow-y-auto" id="discovery-scroll">
       <div className="fade-in">
         {/* Hero banner */}
-        <div className="relative h-[340px] overflow-hidden">
+        <div
+          className="relative h-[340px] overflow-hidden"
+          style={{ background: `radial-gradient(ellipse at 50% 40%, ${product.color}44 0%, #0a0a0c 70%)` }}
+        >
           <img
             src={product.thumbnail}
             alt={product.name}
-            className="w-full h-full object-cover"
-            style={{ filter: "brightness(0.4) saturate(1.2)" }}
+            className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 h-[220px] w-[220px] object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.55)]"
           />
           <div
             className="absolute inset-0"

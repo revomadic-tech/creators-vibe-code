@@ -7,6 +7,7 @@ import {
   BookOpen,
   Bell,
   Search,
+  Settings,
   Command,
   ChevronDown,
   ChevronUp,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { currentUser, notifications, briefs, assets } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
-import { AnimatedPopover } from "./OverlayPanel";
+import { APP_TICKER_H, APP_NAV_H, APP_GUTTER } from "./chrome";
 
 const navItems = [
   { to: "/", icon: Compass, label: "Discovery" },
@@ -25,7 +26,10 @@ const navItems = [
   { to: "/brand", icon: BookOpen, label: "Brand" },
 ];
 
-export default function FloatingNav() {
+const SETTLE_MS = 280;
+const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+export default function FloatingNav({ progress = 0, settling = false }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -33,8 +37,9 @@ export default function FloatingNav() {
   const searchRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, isOpenVisual } =
+  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen } =
     useCommandCenter();
+  const docked = progress > 0.45;
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const searchResults = useMemo(() => {
@@ -88,11 +93,11 @@ export default function FloatingNav() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (isOpenVisual) {
+    if (docked) {
       setShowNotifications(false);
       setSearchFocused(false);
     }
-  }, [isOpenVisual]);
+  }, [docked]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -129,18 +134,23 @@ export default function FloatingNav() {
         : "text-white/40 hover:text-white hover:bg-white/[0.08]"
     }`;
 
-  const popoverAnchor = isOpenVisual ? "bottom-full mb-2" : "top-full mt-2";
+  const popoverAnchor = docked ? "bottom-full mb-2" : "top-full mt-2";
 
   return (
     <div
       ref={navRef}
       data-command-interactive
-      className="floating-nav fixed inset-x-0 z-50"
+      className="fixed z-50"
+      style={{
+        top: `calc(${APP_TICKER_H}px + ${progress} * (100dvh - ${APP_NAV_H}px - ${APP_TICKER_H}px))`,
+        left: APP_GUTTER,
+        right: APP_GUTTER,
+        transition: settling ? `top ${SETTLE_MS}ms ${SETTLE_EASE}` : "none",
+      }}
     >
       <div
-        className={`flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 ${
-          isOpenVisual ? "rounded-none border-x-0 border-b-0" : "rounded-none border-x-0 border-t-0"
-        }`}
+        className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl"
+        style={{ backgroundColor: "rgba(25, 30, 41, 0.42)" }}
       >
         <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
         <button
@@ -198,7 +208,9 @@ export default function FloatingNav() {
         })}
         </div>
 
-        <div className="studio-nav-tools flex items-center gap-0.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+        {!docked && (
+          <>
             <button
               type="button"
               onClick={() => {
@@ -211,6 +223,10 @@ export default function FloatingNav() {
             >
               <Search size={14} />
             </button>
+
+            <NavLink to="/settings" className={({ isActive }) => iconBtn(isActive)}>
+              <Settings size={14} />
+            </NavLink>
 
             <NavLink to="/admin" className={({ isActive }) => iconBtn(isActive)}>
               <Users size={14} />
@@ -234,13 +250,13 @@ export default function FloatingNav() {
             <button className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.08] hover:border-white/[0.18] transition-all duration-200 flex-shrink-0">
               <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
             </button>
+          </>
+        )}
         </div>
       </div>
 
-      <AnimatedPopover
-        open={searchFocused && !isOpenVisual}
-        className={`absolute right-4 ${popoverAnchor} w-[min(420px,calc(100vw-2rem))] glass-panel rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/40`}
-      >
+      {searchFocused && !docked && (
+        <div className={`absolute right-4 ${popoverAnchor} w-[min(420px,calc(100vw-2rem))] glass-panel rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/40 animate-expand-popup`}>
           <div className="relative px-3 pt-3 pb-2">
             <Search size={14} className="absolute left-6 top-[22px] text-white/25 pointer-events-none" />
             <input
@@ -301,12 +317,11 @@ export default function FloatingNav() {
               )}
             </div>
           )}
-      </AnimatedPopover>
+        </div>
+      )}
 
-      <AnimatedPopover
-        open={showNotifications && !isOpenVisual}
-        className={`absolute right-4 ${popoverAnchor} w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden`}
-      >
+      {showNotifications && !docked && (
+        <div className={`absolute right-4 ${popoverAnchor} w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden fade-in`}>
           <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
             <span className="text-[13px] font-semibold text-white">Notifications</span>
             <span className="text-[10px] text-accent-red font-semibold px-2 py-0.5 bg-accent-red/10 rounded-full">
@@ -333,7 +348,8 @@ export default function FloatingNav() {
               </div>
             ))}
           </div>
-      </AnimatedPopover>
+        </div>
+      )}
     </div>
   );
 }

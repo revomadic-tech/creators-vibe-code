@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,6 +26,8 @@ const KIND_SURFACE = {
   assignment: "bg-sky-400/22 text-sky-50 border-sky-300/35",
   delivery: "bg-teal-400/22 text-teal-50 border-teal-300/35",
 };
+
+const MARQUEE_PX_PER_SEC = 34;
 
 function entryKey(entry) {
   return entry.kind === "announcement"
@@ -62,10 +64,10 @@ function TickerChip({ entry, selected, inertClone, onSelect }) {
         e.stopPropagation();
         onSelect(entry);
       }}
-      className={`flex items-center gap-1.5 shrink-0 h-7 px-2.5 rounded-full border shadow-sm transition-all cursor-pointer text-left max-w-[min(92vw,42rem)] ${surface} ${
+      className={`flex items-center gap-1.5 shrink-0 h-7 px-2.5 rounded-full border shadow-sm cursor-pointer text-left max-w-[min(92vw,42rem)] transition-[filter,box-shadow] duration-150 ${surface} ${
         selected
-          ? "ring-2 ring-offset-1 ring-offset-transparent ring-white/35 scale-[1.03] z-[1]"
-          : "hover:brightness-110 active:scale-[0.98]"
+          ? "ring-2 ring-offset-1 ring-offset-transparent ring-white/35 z-[1]"
+          : "hover:brightness-110"
       }`}
     >
       <Icon size={10} className="shrink-0 opacity-85" />
@@ -96,8 +98,14 @@ function TickerChip({ entry, selected, inertClone, onSelect }) {
 
 export default function AnnouncementTicker() {
   const { open, toggle } = useCommandCenter();
-  const [hovered, setHovered] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
+  const [copies, setCopies] = useState(2);
+
+  const viewportRef = useRef(null);
+  const trackRef = useRef(null);
+  const setRef = useRef(null);
+  const hoverRef = useRef(false);
+  const pauseRef = useRef(false);
 
   const tickerItems = useMemo(() => {
     const unread = notifications.filter((n) => !n.read);
@@ -110,7 +118,55 @@ export default function AnnouncementTicker() {
       .map((a) => ({ kind: "announcement", announcement: a }));
   }, []);
 
-  const marqueeSeconds = Math.max(28, tickerItems.length * 10);
+  pauseRef.current = hoverRef.current || open;
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const track = trackRef.current;
+    const firstSet = setRef.current;
+    if (!viewport || !track || !firstSet || tickerItems.length === 0) return;
+
+    let x = 0;
+    let last = performance.now();
+    let raf = 0;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    const syncCopies = () => {
+      const setW = firstSet.offsetWidth;
+      const viewW = viewport.offsetWidth;
+      if (setW <= 0) return;
+      const needed = Math.max(2, Math.ceil(viewW / setW) + 1);
+      setCopies((c) => (c === needed ? c : needed));
+    };
+
+    syncCopies();
+    const ro = new ResizeObserver(syncCopies);
+    ro.observe(viewport);
+    ro.observe(firstSet);
+
+    const tick = (now) => {
+      raf = requestAnimationFrame(tick);
+      if (reduced.matches) {
+        track.style.transform = "translate3d(0,0,0)";
+        last = now;
+        return;
+      }
+      const dt = Math.min(0.048, (now - last) / 1000);
+      last = now;
+      if (pauseRef.current) return;
+      const w = firstSet.offsetWidth;
+      if (w <= 0) return;
+      x -= MARQUEE_PX_PER_SEC * dt;
+      while (x <= -w) x += w;
+      track.style.transform = `translate3d(${x}px,0,0)`;
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [tickerItems]);
 
   const activate = (entry) => {
     setSelectedKey(entryKey(entry));
@@ -121,8 +177,14 @@ export default function AnnouncementTicker() {
     <div
       className="absolute top-0 inset-x-0 z-[60] overflow-hidden border-b border-white/[0.08]"
       style={{ height: "var(--app-ticker-h)" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => {
+        hoverRef.current = true;
+        pauseRef.current = true;
+      }}
+      onMouseLeave={() => {
+        hoverRef.current = false;
+        pauseRef.current = open;
+      }}
     >
       <div className="absolute inset-0 bg-[#0c0e12]" />
       <div
@@ -138,22 +200,22 @@ export default function AnnouncementTicker() {
       <div className="absolute left-[10px] top-[7px] bottom-[7px] w-[3px] rounded-full opacity-70 bg-gradient-to-b from-amber-400 via-orange-400 to-accent-red" />
 
       <div className="relative flex items-center h-full pl-6 pr-3">
-        <div className="flex-1 min-w-0 overflow-hidden relative h-7">
+        <div
+          ref={viewportRef}
+          className="flex-1 min-w-0 overflow-hidden relative h-7"
+        >
           {tickerItems.length === 0 ? (
             <div className="h-full flex items-center px-1 text-[12px] italic text-white/40">
               You're all caught up
             </div>
           ) : (
             <>
-              <div
-                className="top-header-marquee-track h-full"
-                data-paused={hovered || open || selectedKey ? "true" : undefined}
-                style={{ animationDuration: `${marqueeSeconds}s` }}
-              >
-                {[0, 1].map((dup) => (
+              <div ref={trackRef} className="top-header-marquee-track h-full">
+                {Array.from({ length: copies }, (_, dup) => (
                   <div
                     key={dup}
-                    className="flex items-center gap-3 px-1 h-full"
+                    ref={dup === 0 ? setRef : undefined}
+                    className="top-header-marquee-set"
                   >
                     {tickerItems.map((entry) => {
                       const key = entryKey(entry);
@@ -162,7 +224,7 @@ export default function AnnouncementTicker() {
                           key={`${dup}-${key}`}
                           entry={entry}
                           selected={selectedKey === key}
-                          inertClone={dup === 1}
+                          inertClone={dup > 0}
                           onSelect={activate}
                         />
                       );

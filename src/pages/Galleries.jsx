@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Plus,
   Image,
@@ -12,7 +12,6 @@ import {
   Download,
 } from "lucide-react";
 import DetailPanel from "../components/layout/DetailPanel";
-import OverlayPanel from "../components/layout/OverlayPanel";
 import GalleryCard from "../components/shared/GalleryCard";
 import SearchBar from "../components/ui/SearchBar";
 import { FilterDropdown } from "../components/ui/FilterBar";
@@ -32,11 +31,6 @@ export default function Galleries() {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [interiorType, setInteriorType] = useState("");
   const [interiorLayout, setInteriorLayout] = useState("grid");
-  const [shownGallery, setShownGallery] = useState(null);
-
-  useEffect(() => {
-    if (selectedGallery) setShownGallery(selectedGallery);
-  }, [selectedGallery]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return galleries;
@@ -50,14 +44,13 @@ export default function Galleries() {
   }, [search]);
 
   const galleryAssets = useMemo(() => {
-    const gallery = selectedGallery || shownGallery;
-    if (!gallery) return [];
-    const pool = assets.slice(0, gallery.assetCount || 12);
+    if (!selectedGallery) return [];
+    const pool = assets.slice(0, selectedGallery.assetCount || 12);
     return pool.filter((a) => {
       if (interiorType && a.type !== interiorType) return false;
       return true;
     });
-  }, [selectedGallery, shownGallery, interiorType]);
+  }, [selectedGallery, interiorType]);
 
   const openGallery = (g) => {
     setSelectedGallery(g);
@@ -125,33 +118,27 @@ export default function Galleries() {
         </div>
       </div>
 
-      {/* Gallery side panel */}
-      <OverlayPanel
-        open={Boolean(selectedGallery) && !selectedAsset}
-        onClose={() => setSelectedGallery(null)}
-        width={520}
-        height="80vh"
-        className="flex flex-col glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/50 overflow-hidden"
-      >
-        {shownGallery && (
-          <GallerySidePanel
-            gallery={shownGallery}
-            galleryAssets={galleryAssets}
-            interiorType={interiorType}
-            setInteriorType={setInteriorType}
-            interiorLayout={interiorLayout}
-            setInteriorLayout={setInteriorLayout}
-            onClose={() => setSelectedGallery(null)}
-            onSelectAsset={(a) => setSelectedAsset(a)}
-          />
-        )}
-      </OverlayPanel>
+      {/* Gallery side panel — 50% width */}
+      {selectedGallery && !selectedAsset && (
+        <GallerySidePanel
+          gallery={selectedGallery}
+          galleryAssets={galleryAssets}
+          interiorType={interiorType}
+          setInteriorType={setInteriorType}
+          interiorLayout={interiorLayout}
+          setInteriorLayout={setInteriorLayout}
+          onClose={() => setSelectedGallery(null)}
+          onSelectAsset={(a) => setSelectedAsset(a)}
+        />
+      )}
 
-      <DetailPanel
-        item={selectedAsset}
-        type="asset"
-        onClose={() => setSelectedAsset(null)}
-      />
+      {selectedAsset && (
+        <DetailPanel
+          item={selectedAsset}
+          type="asset"
+          onClose={() => setSelectedAsset(null)}
+        />
+      )}
     </>
   );
 }
@@ -167,7 +154,9 @@ function GallerySidePanel({
   onSelectAsset,
 }) {
   return (
-    <div className="h-full flex flex-col">
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-50 w-[520px] max-h-[80vh] flex flex-col glass-panel rounded-2xl border border-white/[0.08] animate-expand-popup shadow-2xl shadow-black/50 overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
           <img src={gallery.thumbnail} alt="" className="w-10 h-10 rounded-xl object-cover img-cinematic flex-shrink-0 ring-1 ring-white/[0.08]" />
@@ -240,6 +229,7 @@ function GallerySidePanel({
             <Share2 size={14} />
           </button>
         </div>
-    </div>
+      </div>
+    </>
   );
 }

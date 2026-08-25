@@ -6,7 +6,9 @@ import {
   GripVertical,
   Plus,
   RotateCcw,
+  Search,
   SlidersHorizontal,
+  Table2,
   X,
 } from "lucide-react";
 import StaffPanel from "../components/shared/StaffPanel";
@@ -47,21 +49,37 @@ function loadInitialOpenGroups() {
   return Object.fromEntries(AD_PHASES.map((p) => [p.id, p.id === openId]));
 }
 const COLUMN_BY_ID = Object.fromEntries(AD_BOARD_COLUMNS.map((col) => [col.id, col]));
-// Tag/badge cells center their chips; plain text columns stay left-aligned.
-const BADGE_COLUMNS = new Set([
-  "status",
-  "product",
-  "priority",
-  "angle",
-  "style",
-  "platform",
-  "painPoint",
-  "performance",
-]);
+
+// Categorical columns get a Monday-style segmented rollup on the group header.
+const ROLLUP_GETTERS = {
+  status: (i) => [i.status],
+  product: (i) => [i.product],
+  priority: (i) => [i.priority],
+  editor: (i) => i.editors || [],
+  angle: (i) => [i.angle],
+  style: (i) => [i.editingStyle],
+  platform: (i) => [i.platform],
+  painPoint: (i) => [i.painPoint],
+  strategist: (i) => i.creativeStrategists || [],
+  performance: (i) => [i.performance],
+};
+
+const ROLLUP_COLORS = {
+  status: AD_STATUS_COLORS,
+  product: AD_PRODUCT_COLORS,
+  priority: AD_PRIORITY_COLORS,
+  angle: AD_ANGLE_COLORS,
+  style: AD_EDITING_STYLE_COLORS,
+  platform: AD_PLATFORM_COLORS,
+  painPoint: AD_PAIN_POINT_COLORS,
+  performance: AD_PERFORMANCE_COLORS,
+};
 const DEFAULT_ORDER = AD_BOARD_COLUMNS.map((col) => col.id);
 const DEFAULT_HIDDEN = AD_BOARD_COLUMNS.filter((col) => col.defaultHidden).map(
   (col) => col.id,
 );
+const DEFAULT_WIDTHS = Object.fromEntries(AD_BOARD_COLUMNS.map((col) => [col.id, col.width]));
+const COL_MAX_WIDTH = 480;
 
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
@@ -80,10 +98,114 @@ function mixOnDark(hex, alpha) {
   return `rgb(${blend(r)}, ${blend(g)}, ${blend(b)})`;
 }
 
-function darken(hex, factor) {
+function contrastText(hex) {
   const { r, g, b } = hexToRgb(hex);
-  const clamp = (n) => Math.max(0, Math.min(255, Math.round(n)));
-  return `rgb(${clamp(r * factor)}, ${clamp(g * factor)}, ${clamp(b * factor)})`;
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150
+    ? "rgba(12, 12, 16, 0.9)"
+    : "rgba(255, 255, 255, 0.95)";
+}
+
+const TAG_FIELDS = {
+  status: (i) => [i.status, AD_STATUS_COLORS[i.status]],
+  product: (i) => [i.product, AD_PRODUCT_COLORS[i.product]],
+  priority: (i) => [i.priority, AD_PRIORITY_COLORS[i.priority]],
+  angle: (i) => [i.angle, AD_ANGLE_COLORS[i.angle]],
+  style: (i) => [i.editingStyle, AD_EDITING_STYLE_COLORS[i.editingStyle]],
+  platform: (i) => [i.platform, AD_PLATFORM_COLORS[i.platform]],
+  painPoint: (i) => [i.painPoint, AD_PAIN_POINT_COLORS[i.painPoint]],
+  performance: (i) => [i.performance, AD_PERFORMANCE_COLORS[i.performance]],
+};
+
+function cellTagColor(columnId, item) {
+  const get = TAG_FIELDS[columnId];
+  if (!get) return null;
+  const [label, color] = get(item);
+  if (!label) return null;
+  return color || hashHueColor(label);
+}
+
+function clampColWidth(col, next) {
+  const min = col?.minWidth || 80;
+  return Math.max(min, Math.min(COL_MAX_WIDTH, Math.round(next)));
+}
+
+function hashHueColor(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i += 1) h = (h * 33 + str.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 62% 52%)`;
+}
+
+function columnSegments(rows, columnId) {
+  const getValues = ROLLUP_GETTERS[columnId];
+  if (!getValues) return null;
+  const colors = ROLLUP_COLORS[columnId];
+  const counts = new Map();
+  for (const row of rows) {
+    for (const raw of getValues(row)) {
+      const v = raw == null ? "" : String(raw).trim();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+  }
+  const entries = [...counts.entries()];
+  if (colors) {
+    const order = Object.keys(colors);
+    entries.sort((a, b) => {
+      const ia = order.indexOf(a[0]);
+      const ib = order.indexOf(b[0]);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || b[1] - a[1];
+    });
+  } else {
+    entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
+  return entries.map(([label, count]) => ({
+    label,
+    count,
+    color: colors?.[label] || hashHueColor(label),
+  }));
+}
+
+function ColumnRollupBar({ segments }) {
+  if (segments == null) return <div className="h-2 mt-1.5" />;
+  const total = segments.reduce((sum, s) => sum + s.count, 0);
+  if (total === 0) {
+    return <div className="h-2 mt-1.5 rounded-sm bg-white/[0.08]" />;
+  }
+  const tip = segments.map((s) => `${s.label} (${s.count})`).join(" · ");
+  return (
+    <div
+      className="h-2 mt-1.5 rounded-sm overflow-hidden flex w-full gap-px bg-black/40"
+      title={tip}
+    >
+      {segments.map((s) => (
+        <span
+          key={s.label}
+          className="block h-full"
+          style={{
+            flex: `${s.count} 0 0`,
+            minWidth: 2,
+            backgroundColor: s.color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ColumnResizeHandle({ onResizeStart }) {
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      title="Drag to resize"
+      data-command-interactive
+      onMouseDown={onResizeStart}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute top-0 -right-px z-40 h-full w-2 cursor-col-resize touch-none group/resize"
+    >
+      <span className="absolute inset-y-1 right-[3px] w-px rounded-full bg-white/0 group-hover/th:bg-white/25 group-hover/resize:bg-white/70 group-active/resize:bg-white" />
+    </span>
+  );
 }
 
 function firstName(name) {
@@ -114,7 +236,7 @@ function isOverdue(item) {
 function loadColumnState() {
   try {
     const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
-    if (!raw) return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN };
+    if (!raw) return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN, widths: DEFAULT_WIDTHS };
     const parsed = JSON.parse(raw);
     const savedOrder = Array.isArray(parsed.order) ? parsed.order : [];
     const known = new Set(DEFAULT_ORDER);
@@ -126,9 +248,15 @@ function loadColumnState() {
     const hidden = (Array.isArray(parsed.hidden) ? parsed.hidden : DEFAULT_HIDDEN).filter(
       (id) => known.has(id) && COLUMN_BY_ID[id]?.hideable !== false,
     );
-    return { order, hidden };
+    const savedWidths = parsed.widths && typeof parsed.widths === "object" ? parsed.widths : {};
+    const widths = { ...DEFAULT_WIDTHS };
+    for (const id of DEFAULT_ORDER) {
+      const w = Number(savedWidths[id]);
+      if (Number.isFinite(w)) widths[id] = clampColWidth(COLUMN_BY_ID[id], w);
+    }
+    return { order, hidden, widths };
   } catch {
-    return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN };
+    return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN, widths: DEFAULT_WIDTHS };
   }
 }
 
@@ -191,11 +319,11 @@ function moveColumn(order, fromId, toId) {
 }
 
 function Badge({ label, color }) {
-  if (!label) return <span className="text-white/20">—</span>;
+  if (!label) return <span className="text-white/25">—</span>;
   return (
     <span
-      className="inline-flex items-center h-5 max-w-full px-1.5 rounded-[4px] text-[11px] font-semibold leading-none tracking-tight text-white/95 whitespace-nowrap overflow-hidden text-ellipsis"
-      style={{ backgroundColor: `${color || "#444"}cc` }}
+      className="block truncate text-[13px] font-semibold leading-none tracking-tight"
+      style={{ color: color ? contrastText(color) : undefined }}
       title={label}
     >
       {label}
@@ -308,7 +436,7 @@ function ColumnPicker({ order, hidden, onToggle, onReorder, onReset }) {
     <div
       role="menu"
       data-command-interactive
-      className="absolute right-0 top-10 z-50 w-[240px] glass-panel rounded-xl border border-white/[0.1] shadow-2xl shadow-black/50 py-2 fade-in"
+      className="absolute right-0 top-full mt-1 z-50 w-[240px] glass-panel rounded-xl border border-white/[0.1] shadow-2xl shadow-black/50 py-2 fade-in"
     >
       <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
         Columns
@@ -384,14 +512,16 @@ function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear
   const options = FACET_OPTIONS[def.id] || [];
   const count = selected.length;
   return (
-    <div className="relative flex-shrink-0">
+    <div className="relative flex-shrink-0 border-r border-white/10">
       <button
         type="button"
         onClick={onToggleOpen}
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${
+        className={`inline-flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium whitespace-nowrap transition-colors ${
           count > 0
-            ? "border-accent-red/30 bg-accent-red/10 text-white"
-            : "border-white/[0.08] bg-white/[0.03] text-white/45 hover:text-white/75 hover:border-white/[0.15]"
+            ? "text-white"
+            : open
+              ? "text-white/80"
+              : "text-white/45 hover:text-white/75"
         }`}
       >
         {def.label}
@@ -463,10 +593,11 @@ function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear
 export default function CommandCenter() {
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState(loadInitialOpenGroups);
-  const [{ order, hidden }, setColumnState] = useState(loadColumnState);
+  const [{ order, hidden, widths }, setColumnState] = useState(loadColumnState);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dragId, setDragId] = useState(null);
   const [dropId, setDropId] = useState(null);
+  const resizeRef = useRef(null);
   const [facets, setFacets] = useState({});
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [openFacet, setOpenFacet] = useState(null);
@@ -475,11 +606,11 @@ export default function CommandCenter() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({ order, hidden }));
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({ order, hidden, widths }));
     } catch {
       /* ignore quota / private mode */
     }
-  }, [order, hidden]);
+  }, [order, hidden, widths]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -579,8 +710,12 @@ export default function CommandCenter() {
   };
 
   const visibleColumns = useMemo(
-    () => order.map((id) => COLUMN_BY_ID[id]).filter((col) => col && !hidden.includes(col.id)),
-    [order, hidden],
+    () =>
+      order
+        .map((id) => COLUMN_BY_ID[id])
+        .filter((col) => col && !hidden.includes(col.id))
+        .map((col) => ({ ...col, width: widths?.[col.id] ?? col.width })),
+    [order, hidden, widths],
   );
 
   const tableMinWidth = visibleColumns.reduce((sum, col) => sum + col.width, 0);
@@ -588,6 +723,34 @@ export default function CommandCenter() {
 
   const setOrder = (next) => setColumnState((prev) => ({ ...prev, order: next }));
   const setHidden = (next) => setColumnState((prev) => ({ ...prev, hidden: next }));
+  const setColWidth = (id, next) => {
+    setColumnState((prev) => ({
+      ...prev,
+      widths: { ...prev.widths, [id]: clampColWidth(COLUMN_BY_ID[id], next) },
+    }));
+  };
+
+  const startResize = (col, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeRef.current = { id: col.id, startX: event.clientX, startW: col.width };
+    const onMove = (e) => {
+      const r = resizeRef.current;
+      if (!r) return;
+      setColWidth(r.id, r.startW + e.clientX - r.startX);
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   const toggleColumn = (id) => {
     if (COLUMN_BY_ID[id]?.hideable === false) return;
@@ -616,62 +779,35 @@ export default function CommandCenter() {
           <StaffPanel className="hidden lg:flex w-[320px] xl:w-[345px] flex-shrink-0" />
 
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            <div className="flex items-end justify-between gap-3 mb-2.5 flex-shrink-0">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider">
-                  Command Center
-                </p>
-                <div className="flex items-baseline gap-2 min-w-0 mt-0.5">
-                  <h1 className="text-lg font-semibold text-white leading-tight whitespace-nowrap">
-                    Ad Production
-                  </h1>
-                  <p className="text-[11px] text-white/35 truncate">
-                    Monday.com board replica — {items.length} ads
-                    {currentUser?.name ? ` · scoped for ${firstName(currentUser.name)}` : ""}.
+            <div
+              className="flex items-center justify-between gap-3 h-[52px] px-3 mb-2.5 flex-shrink-0 rounded-xl border border-white/10"
+              style={{ background: "#191e29" }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Table2 size={13} className="text-[#E8C4A0] shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#E8C4A0]">
+                    Command Center
                   </p>
+                  <div className="flex items-baseline gap-2 min-w-0 mt-0.5">
+                    <h1 className="text-[13px] font-semibold text-[#F7F5F2] leading-tight whitespace-nowrap">
+                      Ad Production
+                    </h1>
+                    <p className="text-[11px] text-white/40 truncate">
+                      Monday.com board replica — {items.length} ads
+                      {currentUser?.name ? ` · scoped for ${firstName(currentUser.name)}` : ""}.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="relative" ref={pickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen((v) => !v)}
-                    className="inline-flex items-center gap-1.5 glass-nav rounded-xl py-2 px-3 text-[12px] text-white/70 hover:text-white"
-                  >
-                    <Columns3 size={13} />
-                    Columns
-                    {hiddenCount > 0 && (
-                      <span className="text-[10px] font-mono text-white/35">{hiddenCount} hidden</span>
-                    )}
-                  </button>
-                  {pickerOpen && (
-                    <ColumnPicker
-                      order={order}
-                      hidden={hidden}
-                      onToggle={toggleColumn}
-                      onReorder={handleReorder}
-                      onReset={() => {
-                        setColumnState({ order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN });
-                      }}
-                    />
-                  )}
-                </div>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Filter ads, status, editor…"
-                  className="w-[200px] xl:w-[260px] glass-nav rounded-xl py-2 px-3 text-[12px] text-white placeholder:text-white/25 outline-none"
-                />
               </div>
             </div>
 
             <div
               ref={filterRailRef}
               data-command-interactive
-              className="flex flex-wrap items-center gap-1.5 mb-2.5 flex-shrink-0"
+              className="flex items-center mb-2.5 flex-shrink-0 border-y border-white/10"
             >
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-white/25 mr-0.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/35 border-r border-white/10 flex-shrink-0">
                 <SlidersHorizontal size={11} />
                 Filters
               </span>
@@ -691,10 +827,10 @@ export default function CommandCenter() {
               <button
                 type="button"
                 onClick={() => setOverdueOnly((v) => !v)}
-                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors flex-shrink-0 ${
+                className={`inline-flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium whitespace-nowrap transition-colors flex-shrink-0 border-r border-white/10 ${
                   overdueOnly
-                    ? "border-accent-red/40 bg-accent-red/15 text-accent-red"
-                    : "border-white/[0.08] bg-white/[0.03] text-white/45 hover:text-white/75 hover:border-white/[0.15]"
+                    ? "text-accent-red"
+                    : "text-white/45 hover:text-white/75"
                 }`}
               >
                 Overdue
@@ -703,16 +839,63 @@ export default function CommandCenter() {
                 <button
                   type="button"
                   onClick={clearAllFilters}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-white/40 hover:text-white/80 transition-colors flex-shrink-0"
+                  className="inline-flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium text-white/40 hover:text-white/80 transition-colors flex-shrink-0 border-r border-white/10"
                 >
                   <X size={11} />
                   Clear all
                 </button>
               )}
+              <div className="flex items-center ml-auto flex-shrink-0 border-l border-white/10">
+                <div className="relative flex-shrink-0 border-r border-white/10" ref={pickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen((v) => !v)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-2 text-[11px] font-medium whitespace-nowrap transition-colors ${
+                      pickerOpen || hiddenCount > 0
+                        ? "text-white"
+                        : "text-white/45 hover:text-white/75"
+                    }`}
+                  >
+                    <Columns3 size={11} />
+                    Columns
+                    {hiddenCount > 0 && (
+                      <span className="text-[10px] font-mono text-accent-red">{hiddenCount}</span>
+                    )}
+                  </button>
+                  {pickerOpen && (
+                    <ColumnPicker
+                      order={order}
+                      hidden={hidden}
+                      onToggle={toggleColumn}
+                      onReorder={handleReorder}
+                      onReset={() => {
+                        setColumnState({
+                          order: DEFAULT_ORDER,
+                          hidden: DEFAULT_HIDDEN,
+                          widths: DEFAULT_WIDTHS,
+                        });
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="relative flex-shrink-0">
+                  <Search
+                    size={12}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+                  />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Filter ads…"
+                    className="w-[160px] xl:w-[200px] h-full py-2 pl-7 pr-3 bg-transparent text-[11px] text-white placeholder:text-white/30 outline-none"
+                  />
+                </div>
+              </div>
             </div>
 
             <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-2 pr-1 flex flex-col"
+              className="flex-1 min-h-0 overflow-auto overscroll-contain space-y-2 pr-1 flex flex-col"
               data-command-canvas-scroll
             >
           {grouped.map((group) => {
@@ -722,63 +905,28 @@ export default function CommandCenter() {
             // surfaces (thead, pinned column) stay opaque so scrolling
             // content can't bleed through them.
             const bodyBg = withAlpha(color, 0.09);
-            const headerBg = withAlpha(color, 0.2);
-            // Column header row: a darker shade of the section color so it
-            // sits below the group tint instead of matching it.
-            const theadBg = darken(color, 0.22);
-            const stickyHead = darken(color, 0.22);
+            // Opaque mix so sticky header + pinned item column don't let
+            // scrolling rows bleed through.
+            const headerBg = mixOnDark(color, 0.3);
             const grid = withAlpha("#ffffff", 0.12);
             const gridStrong = withAlpha("#ffffff", 0.3);
             return (
               <section
                 key={group.id}
-                // Sections hug their rows — no stretch, so there is no empty
-                // body space; the "Add new" placeholder row closes each table.
                 className={`rounded-2xl overflow-hidden border backdrop-blur-xl flex-shrink-0 ${
                   open ? "flex flex-col" : ""
                 }`}
                 style={{
+                  minWidth: tableMinWidth,
                   backgroundColor: bodyBg,
                   borderColor: withAlpha(color, 0.28),
                   boxShadow: `inset 3px 0 0 ${color}`,
                 }}
               >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleGroup(group.id, !open)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleGroup(group.id, !open);
-                    }
-                  }}
-                  className="w-full flex items-center gap-1.5 px-2.5 py-2 text-left hover:brightness-110 transition-[filter] flex-shrink-0 cursor-pointer select-none"
-                  style={{ backgroundColor: headerBg }}
-                >
-                  <ChevronDown
-                    size={12}
-                    className={`text-white/50 transition-transform ${open ? "" : "-rotate-90"}`}
-                  />
-                  <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-[13px] font-semibold text-white">
-                    {group.title}
-                  </span>
-                  <span
-                    className="text-[11px] font-mono px-1.5 py-0.5 rounded-md"
-                    style={{ backgroundColor: withAlpha(color, 0.22), color }}
-                  >
-                    {group.rows.length}
-                  </span>
-                </div>
-                {open && (
-                  <div className="overflow-auto max-h-[60vh]">
+                <div className={open ? "overflow-y-auto max-h-[60vh]" : ""}>
                     <table
-                      className="w-full text-left table-fixed border-separate border-spacing-0"
-                      style={{ minWidth: tableMinWidth }}
+                      className="text-left table-fixed border-separate border-spacing-0"
+                      style={{ width: tableMinWidth }}
                     >
                       <colgroup>
                         {visibleColumns.map((col) => (
@@ -786,7 +934,13 @@ export default function CommandCenter() {
                         ))}
                       </colgroup>
                       <thead>
-                        <tr className="text-[10px] uppercase tracking-wide text-white/40 border-t border-white/[0.06]">
+                        <tr
+                          className="text-[10px] uppercase tracking-wide text-white/45 hover:brightness-110 transition-[filter] cursor-pointer select-none"
+                          onClick={(e) => {
+                            if (e.target.closest("button, a, input, [role='separator']")) return;
+                            toggleGroup(group.id, !open);
+                          }}
+                        >
                           {visibleColumns.map((col) => {
                             const pinned = Boolean(col.pinned);
                             const isDrop = dropId === col.id && dragId && dragId !== col.id;
@@ -795,9 +949,12 @@ export default function CommandCenter() {
                                 key={col.id}
                                 draggable={!pinned}
                                 data-command-interactive={!pinned ? "" : undefined}
-                                title={pinned ? undefined : "Drag to reorder"}
+                                title={pinned ? undefined : "Drag name to reorder, edge to resize"}
                                 onDragStart={(e) => {
-                                  if (pinned) return;
+                                  if (pinned || resizeRef.current) {
+                                    e.preventDefault();
+                                    return;
+                                  }
                                   setDragId(col.id);
                                   e.dataTransfer.setData("text/plain", col.id);
                                   e.dataTransfer.effectAllowed = "move";
@@ -818,7 +975,7 @@ export default function CommandCenter() {
                                   setDragId(null);
                                   setDropId(null);
                                 }}
-                                className={`group/th px-2.5 py-2 font-semibold ${
+                                className={`group/th relative px-3 py-3 font-semibold align-top ${
                                   pinned
                                     ? "sticky left-0 top-0 z-30"
                                     : "sticky top-0 z-20 cursor-grab active:cursor-grabbing"
@@ -826,48 +983,90 @@ export default function CommandCenter() {
                                   isDrop ? "shadow-[inset_2px_0_0_0_rgba(255,255,255,0.7)]" : ""
                                 }`}
                                 style={{
-                                  backgroundColor: pinned ? stickyHead : theadBg,
+                                  backgroundColor: headerBg,
                                   width: col.width,
                                   minWidth: col.width,
                                   borderBottom: `1px solid ${gridStrong}`,
-                                  borderRight: `1px solid ${gridStrong}`,
-                                  boxShadow: `inset -1px 0 0 ${gridStrong}`,
+                                  borderRight: `1px solid ${grid}`,
                                 }}
                               >
-                                <div className="flex items-center gap-1 min-w-0">
-                                  {!pinned && (
-                                    <GripVertical size={10} className="flex-shrink-0 text-white/25" />
-                                  )}
-                                  <span className="truncate">{col.label}</span>
-                                  {col.hideable !== false && (
-                                    <button
-                                      type="button"
-                                      title={`Hide ${col.label}`}
-                                      onMouseDown={(e) => {
-                                        e.stopPropagation();
+                                {pinned ? (
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-expanded={open}
+                                    data-command-interactive
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
                                         e.preventDefault();
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleColumn(col.id);
-                                      }}
-                                      className="ml-auto flex-shrink-0 rounded text-white/0 group-hover/th:text-white/35 hover:!text-white/70"
-                                    >
-                                      <EyeOff size={10} />
-                                    </button>
-                                  )}
-                                </div>
+                                        toggleGroup(group.id, !open);
+                                      }
+                                    }}
+                                    className="flex flex-col min-w-0 text-left normal-case tracking-normal"
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0 h-[18px] border-b border-white/15">
+                                      <ChevronDown
+                                        size={12}
+                                        className={`flex-shrink-0 text-white/50 transition-transform ${
+                                          open ? "" : "-rotate-90"
+                                        }`}
+                                      />
+                                      <span
+                                        className="block truncate text-[13px] font-semibold leading-none"
+                                        style={{ color }}
+                                      >
+                                        {group.title}
+                                      </span>
+                                    </div>
+                                    <span className="mt-1.5 block truncate text-[10px] font-medium leading-none text-white/40">
+                                      {group.rows.length}{" "}
+                                      {group.rows.length === 1 ? "ad" : "ads"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="relative flex items-center min-w-0 h-[18px] border-b border-white/15">
+                                      <GripVertical
+                                        size={10}
+                                        className="absolute -left-0.5 text-white/0 group-hover/th:text-white/35 pointer-events-none"
+                                      />
+                                      <span className="truncate pr-3.5">{col.label}</span>
+                                      {col.hideable !== false && (
+                                        <button
+                                          type="button"
+                                          title={`Hide ${col.label}`}
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleColumn(col.id);
+                                          }}
+                                          className="absolute right-0 top-1/2 -translate-y-1/2 rounded text-white/0 group-hover/th:text-white/35 hover:!text-white/70"
+                                        >
+                                          <EyeOff size={10} />
+                                        </button>
+                                      )}
+                                    </div>
+                                    <ColumnRollupBar
+                                      segments={columnSegments(group.rows, col.id)}
+                                    />
+                                  </>
+                                )}
+                                <ColumnResizeHandle onResizeStart={(e) => startResize(col, e)} />
                               </th>
                             );
                           })}
                         </tr>
                       </thead>
+                      {open && (
                       <tbody>
                         {group.rows.length === 0 ? (
                           <tr>
                             <td
                               colSpan={visibleColumns.length}
-                              className="px-2.5 py-4 text-[12px] text-white/25"
+                              className="px-3 py-4 text-[12px] text-white/25"
                             >
                               No ads in this phase.
                             </td>
@@ -875,28 +1074,34 @@ export default function CommandCenter() {
                         ) : (
                           group.rows.map((item, rowIdx) => (
                             <tr key={item.id} className="group/row">
-                              {visibleColumns.map((col) => (
+                              {visibleColumns.map((col) => {
+                                const tagColor = cellTagColor(col.id, item);
+                                return (
                                 <td
                                   key={col.id}
-                                  className={`px-2.5 py-2 text-[13px] leading-none whitespace-nowrap align-middle ${
-                                    col.pinned ? "sticky left-0 z-10" : ""
-                                  } ${BADGE_COLUMNS.has(col.id) ? "text-center" : ""}`}
+                                  className={`px-3 py-4 text-[13px] leading-none whitespace-nowrap align-middle ${
+                                    col.pinned
+                                      ? "sticky left-0 z-10"
+                                      : tagColor
+                                        ? ""
+                                        : rowIdx % 2
+                                          ? "bg-black/[0.14] group-hover/row:bg-white/[0.07]"
+                                          : "group-hover/row:bg-white/[0.05]"
+                                  }`}
                                   style={{
                                     backgroundColor: col.pinned
                                       ? mixOnDark(color, rowIdx % 2 ? 0.26 : 0.2)
-                                      : rowIdx % 2
-                                        ? "rgba(0,0,0,0.14)"
-                                        : undefined,
+                                      : tagColor || undefined,
                                     width: col.width,
                                     minWidth: col.width,
                                     borderTop: `1px solid ${grid}`,
                                     borderRight: `1px solid ${grid}`,
-                                    boxShadow: `inset -1px 0 0 ${grid}`,
                                   }}
                                 >
                                   {renderCell(col.id, item)}
                                 </td>
-                              ))}
+                                );
+                              })}
                             </tr>
                           ))
                         )}
@@ -904,12 +1109,11 @@ export default function CommandCenter() {
                             bottom of every group. */}
                         <tr>
                           <td
-                            className="sticky left-0 z-10 px-2.5 py-1.5 whitespace-nowrap"
+                            className="sticky left-0 z-10 px-3 py-4 whitespace-nowrap"
                             style={{
                               backgroundColor: mixOnDark(color, 0.2),
                               borderTop: `1px solid ${grid}`,
                               borderRight: `1px solid ${grid}`,
-                              boxShadow: `inset -1px 0 0 ${grid}`,
                             }}
                           >
                             <button
@@ -929,9 +1133,9 @@ export default function CommandCenter() {
                           )}
                         </tr>
                       </tbody>
+                      )}
                     </table>
                   </div>
-                )}
               </section>
             );
           })}

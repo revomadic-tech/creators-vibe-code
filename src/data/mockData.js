@@ -38,6 +38,15 @@ export const statuses = ["In Progress", "In Review", "Approved", "Needs Revision
 export const assetTypes = ["Photo", "Video", "Graphic", "Motion", "3D Render", "Illustration"];
 export const categories = ["Campaign", "Product Shot", "Lifestyle", "Editorial", "Social", "Packaging", "Event", "BTS"];
 
+const fileExtsByType = {
+  Photo: [".jpg", ".png", ".tif", ".raw", ".dng"],
+  Video: [".mp4", ".mov", ".mxf"],
+  Graphic: [".psd", ".ai", ".png", ".svg"],
+  Motion: [".mp4", ".mov", ".aep"],
+  "3D Render": [".exr", ".png", ".c4d"],
+  Illustration: [".ai", ".svg", ".png"],
+};
+
 function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -78,6 +87,7 @@ export const assets = Array.from({ length: 80 }, (_, i) => {
     title: assetTitles[i % 20],
     thumbnail: IMG(`asset${id}`, w, h),
     type,
+    fileExt: randomFrom(fileExtsByType[type] || [".bin"]),
     category: randomFrom(categories),
     product: randomFrom(products),
     partner: randomFrom(partners),
@@ -281,6 +291,28 @@ export const briefs = [
   },
 ];
 
+export const tasks = [
+  { id: 1, title: "Finalize 30s campaign cutdown", briefId: 1, briefTitle: "REVO Sport SS26 Campaign", status: "In Review", assignee: teamMembers[0], dueDate: "2026-04-12", priority: "High" },
+  { id: 2, title: "Color grade brand film bumper #3", briefId: 2, briefTitle: "REVO Luxe Brand Film", status: "In Progress", assignee: teamMembers[6], dueDate: "2026-04-14", priority: "High" },
+  { id: 3, title: "Retouch product shots batch 2", briefId: 3, briefTitle: "REVO x Puma Co-Brand", status: "In Progress", assignee: teamMembers[1], dueDate: "2026-04-15", priority: "Critical" },
+  { id: 4, title: "Design social grid template set", briefId: 1, briefTitle: "REVO Sport SS26 Campaign", status: "In Progress", assignee: teamMembers[2], dueDate: "2026-04-18", priority: "Medium" },
+  { id: 5, title: "Export hero film 4K master", briefId: 2, briefTitle: "REVO Luxe Brand Film", status: "In Review", assignee: teamMembers[3], dueDate: "2026-04-11", priority: "High" },
+  { id: 6, title: "Select lifestyle shoot top 20", briefId: 5, briefTitle: "REVO Home Lifestyle Shoot", status: "In Progress", assignee: teamMembers[7], dueDate: "2026-04-16", priority: "Medium" },
+  { id: 7, title: "Create Tokyo mood board", briefId: 6, briefTitle: "REVO Travel Campaign Q3", status: "Draft", assignee: teamMembers[4], dueDate: "2026-04-25", priority: "Low" },
+  { id: 8, title: "Upload POS layout drafts", briefId: 1, briefTitle: "REVO Sport SS26 Campaign", status: "Draft", assignee: teamMembers[2], dueDate: "2026-04-22", priority: "Medium" },
+];
+
+export const savedViews = [
+  { id: 1, name: "My Review Queue", icon: "eye", count: 14, filters: { status: "In Review" }, description: "Assets waiting for your review" },
+  { id: 2, name: "REVO Sport Assets", icon: "zap", count: 86, filters: { product: "REVO Sport" }, description: "All Sport line creative" },
+  { id: 3, name: "Photography", icon: "camera", count: 412, filters: { type: "Photo" }, description: "Photo assets only" },
+  { id: 4, name: "Needs Editor", icon: "user-plus", count: 23, filters: { editorNeeded: true }, description: "Unassigned work" },
+  { id: 5, name: "This Week", icon: "clock", count: 47, filters: { daysAgo: 7 }, description: "Uploaded in last 7 days" },
+  { id: 6, name: "Campaign Hero Shots", icon: "star", count: 31, filters: { category: "Campaign" }, description: "Hero campaign imagery" },
+  { id: 7, name: "Video & Motion", icon: "film", count: 128, filters: { type: "Video" }, description: "All motion content" },
+  { id: 8, name: "Approved & Delivered", icon: "check", count: 892, filters: { status: "Approved" }, description: "Final approved assets" },
+];
+
 export const galleries = [
   {
     id: 1, title: "SS26 Campaign Selects", description: "Final approved shots from the Spring/Summer campaign shoot",
@@ -410,6 +442,54 @@ export const announcements = [
   },
 ];
 
+export const recentActivity = [
+  { id: 1, user: teamMembers[0], action: "uploaded 4 new assets to", target: "SS26 Campaign", time: "12m ago" },
+  { id: 2, user: teamMembers[3], action: "completed color grade on", target: "Brand Film 90s", time: "34m ago" },
+  { id: 3, user: teamMembers[1], action: "started shooting for", target: "Home Lifestyle Shoot", time: "1h ago" },
+  { id: 4, user: teamMembers[2], action: "submitted revision for", target: "Co-Brand Logo Suite", time: "2h ago" },
+  { id: 5, user: teamMembers[6], action: "approved deliverable in", target: "Kids Illustration Series", time: "3h ago" },
+  { id: 6, user: teamMembers[4], action: "created new brief", target: "Travel Campaign Q3", time: "4h ago" },
+  { id: 7, user: teamMembers[7], action: "downloaded selects from", target: "Product Detail Library", time: "5h ago" },
+];
+
+export const spotlightCampaigns = [
+  { id: 1, title: "Sport SS26", subtitle: "Spring/Summer", thumbnail: IMG("spot1", 900, 700), metric: "86 Assets", briefId: 1, product: "REVO Sport" },
+  { id: 2, title: "Luxe Film", subtitle: "Brand Awareness", thumbnail: IMG("spot2", 900, 700), metric: "32 Assets", briefId: 2, product: "REVO Luxe" },
+  { id: 3, title: "Puma Collab", subtitle: "Co-Brand Drop", thumbnail: IMG("spot3", 900, 700), metric: "54 Assets", briefId: 3, product: "REVO x Puma" },
+  { id: 4, title: "Home Lifestyle", subtitle: "Lisbon Shoot", thumbnail: IMG("spot4", 900, 900), metric: "120 Assets", briefId: 5, product: "REVO Home" },
+  { id: 5, title: "Kids Launch", subtitle: "Illustration Series", thumbnail: IMG("spot5", 900, 700), metric: "48 Assets", briefId: 4, product: "REVO Kids" },
+  { id: 6, title: "Travel Q3", subtitle: "Global Campaign", thumbnail: IMG("spot6", 900, 700), metric: "18 Assets", briefId: 6, product: "REVO Travel" },
+];
+
+export const curatedCollections = [
+  { id: 1, title: "Campaign Heroes", subtitle: "Best-of selects", thumbnail: IMG("coll1", 900, 700), count: 247, accent: "red" },
+  { id: 2, title: "Motion & Video", subtitle: "All formats", thumbnail: IMG("coll2", 900, 700), count: 891, accent: "purple" },
+  { id: 3, title: "Product Library", subtitle: "On-white shots", thumbnail: IMG("coll3", 900, 700), count: 1420, accent: "teal" },
+  { id: 4, title: "Editorial", subtitle: "Magazine & Press", thumbnail: IMG("coll4", 900, 900), count: 364, accent: "blue" },
+  { id: 5, title: "Social Content", subtitle: "Grid & Stories", thumbnail: IMG("coll5", 900, 700), count: 2106, accent: "orange" },
+  { id: 6, title: "Packaging", subtitle: "Print-ready", thumbnail: IMG("coll6", 900, 700), count: 518, accent: "red" },
+];
+
+export const featuredGalleryCards = [
+  { id: 1, title: "SS26 Selects", subtitle: "Campaign Finals", thumbnail: IMG("fgal1", 900, 700), assetCount: 48, curator: teamMembers[4] },
+  { id: 2, title: "Brand Film", subtitle: "Stills & BTS", thumbnail: IMG("fgal2", 900, 700), assetCount: 32, curator: teamMembers[3] },
+  { id: 3, title: "Product Detail", subtitle: "High-Res Library", thumbnail: IMG("fgal3", 900, 700), assetCount: 120, curator: teamMembers[1] },
+  { id: 4, title: "Inspiration", subtitle: "Mood & Direction", thumbnail: IMG("fgal4", 900, 900), assetCount: 67, curator: teamMembers[2] },
+  { id: 5, title: "Puma Refs", subtitle: "Collaboration", thumbnail: IMG("fgal5", 900, 700), assetCount: 25, curator: teamMembers[4] },
+  { id: 6, title: "Social Best", subtitle: "Top Performers", thumbnail: IMG("fgal6", 900, 700), assetCount: 36, curator: teamMembers[0] },
+];
+
+export const dashboardStats = {
+  totalAssets: 31247,
+  assetsThisWeek: 184,
+  activeBriefs: 5,
+  briefsDueThisMonth: 3,
+  teamOnline: 6,
+  teamTotal: 8,
+  deliverablesPending: 14,
+  approvalRate: 94,
+};
+
 export const socialPerformance = {
   overview: {
     totalImpressions: 4_872_000,
@@ -496,13 +576,16 @@ export const socialPerformance = {
   ],
 };
 
+const SHOP = (file, v, w = 600) =>
+  `https://revomadic.com/cdn/shop/files/${file}?v=${v}&width=${w}`;
+
 export const revoProducts = [
   {
     id: "wave",
     name: "WAVE",
     tagline: "Ultrasonic Skin Device",
     description: "Precision ultrasonic cleansing and infusion technology for professional-grade skin treatment at home.",
-    thumbnail: IMG("revo-wave", 900, 700),
+    thumbnail: SHOP("Wave_Shopify_f2cc9493-19f3-4bc4-a7de-b91972c489d2.png", "1783435939"),
     color: "#3b82f6",
     assetCount: 342,
     briefCount: 4,
@@ -514,7 +597,7 @@ export const revoProducts = [
     name: "PILL",
     tagline: "LED Therapy Capsule",
     description: "Targeted LED light therapy in a portable capsule form factor. Red, blue, and near-infrared wavelengths.",
-    thumbnail: IMG("revo-pill", 900, 700),
+    thumbnail: SHOP("the_pill.jpg", "1773728905"),
     color: "#e8442e",
     assetCount: 218,
     briefCount: 3,
@@ -526,7 +609,7 @@ export const revoProducts = [
     name: "CUPPER",
     tagline: "Smart Cupping System",
     description: "Intelligent vacuum cupping with heat therapy. App-connected for personalized treatment routines.",
-    thumbnail: IMG("revo-cupper", 900, 700),
+    thumbnail: SHOP("REVO-Smart-Cup.jpg", "1746888998"),
     color: "#14b8a6",
     assetCount: 156,
     briefCount: 2,
@@ -538,7 +621,7 @@ export const revoProducts = [
     name: "FACE GENIE",
     tagline: "Microcurrent Sculptor",
     description: "Advanced microcurrent facial toning and sculpting. EMS technology for visible lift and definition.",
-    thumbnail: IMG("revo-facegenie", 900, 700),
+    thumbnail: SHOP("FG_Device.jpg", "1776521918"),
     color: "#8b5cf6",
     assetCount: 289,
     briefCount: 5,
@@ -546,11 +629,23 @@ export const revoProducts = [
     topMetric: "1.8M Impressions",
   },
   {
+    id: "sculptor",
+    name: "SCULPTOR",
+    tagline: "Body Sculpting Device",
+    description: "Vacuum suction, thermal heat, and red light therapy for full-body sculpting and cellulite refinement at home.",
+    thumbnail: SHOP("Sculptor_1st_Variant.webp", "1787678925"),
+    color: "#ffcb00",
+    assetCount: 267,
+    briefCount: 3,
+    ugcCount: 61,
+    topMetric: "980K Impressions",
+  },
+  {
     id: "collagen-jelly",
     name: "COLLAGEN JELLY",
     tagline: "Ingestible Beauty",
     description: "Marine collagen peptide supplement in jelly form. Bioavailable formula for skin, hair, and nail support.",
-    thumbnail: IMG("revo-collagenjelly", 900, 700),
+    thumbnail: SHOP("Collagen-Jelly_a2a13f9c-46fe-4de4-bc8a-fad8ddb2ee25.jpg", "1748528264"),
     color: "#f26b3a",
     assetCount: 194,
     briefCount: 3,

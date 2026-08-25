@@ -4,8 +4,8 @@ import {
   AtSign,
   ChevronDown,
   ChevronRight,
-  FilePenLine,
   Hash,
+  Inbox,
   MessageSquare,
   Paperclip,
   PenSquare,
@@ -31,7 +31,6 @@ const FILTERS = [
   { key: "all", label: "All" },
   { key: "activity", label: "Activity" },
   { key: "unread", label: "Unread" },
-  { key: "drafts", label: "Drafts" },
 ];
 
 const ACTIVITY_KIND = {
@@ -206,23 +205,37 @@ function ConversationRow({ conv, active, onClick }) {
   );
 }
 
-function SectionHeader({ icon: Icon, label, count, open, onToggle }) {
+function SectionHeader({ icon: Icon, label, count, open, onToggle, collapsible = true }) {
+  const inner = (
+    <>
+      {collapsible ? (
+        open ? (
+          <ChevronDown size={12} className="text-white/30 shrink-0" />
+        ) : (
+          <ChevronRight size={12} className="text-white/30 shrink-0" />
+        )
+      ) : null}
+      <Icon size={11} className="text-white/30 shrink-0" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/35 truncate">
+        {label}
+      </span>
+      <span className="text-[10px] tabular-nums text-white/25">{count}</span>
+    </>
+  );
+  if (!collapsible) {
+    return (
+      <div className="flex w-full items-center gap-1.5 px-2 pb-1.5 pt-2">
+        {inner}
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onToggle}
       className="flex w-full items-center gap-1.5 px-2 pb-1.5 pt-2 rounded-lg text-left hover:bg-white/[0.04]"
     >
-      {open ? (
-        <ChevronDown size={12} className="text-white/30 shrink-0" />
-      ) : (
-        <ChevronRight size={12} className="text-white/30 shrink-0" />
-      )}
-      <Icon size={11} className="text-white/30 shrink-0" />
-      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/35 truncate">
-        {label}
-      </span>
-      <span className="text-[10px] tabular-nums text-white/25">{count}</span>
+      {inner}
     </button>
   );
 }
@@ -237,12 +250,11 @@ function ConversationList({
   onSelect,
   onNew,
   activityUnread,
-  draftCount,
 }) {
   const [openSections, setOpenSections] = useState({
-    channel: true,
-    group: true,
-    dm: true,
+    channel: false,
+    group: false,
+    dm: false,
   });
 
   const q = search.trim().toLowerCase();
@@ -252,17 +264,28 @@ function ConversationList({
       return false;
     }
     if (filter === "unread") return c.unread > 0;
-    if (filter === "drafts") return !!c.draft;
     return true;
   });
 
   const channels = filtered.filter((c) => c.type === "channel");
   const groups = filtered.filter((c) => c.type === "group");
   const dms = filtered.filter((c) => c.type === "dm");
+  const unreads = filtered.filter((c) => c.unread > 0);
   const totalUnread = conversations.filter((c) => c.unread > 0).length;
+  const searching = q.length > 0;
+  const sectionOpen = (key) => searching || openSections[key];
 
   const toggle = (key) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const renderConv = (c) => (
+    <ConversationRow
+      key={c.id}
+      conv={c}
+      active={c.id === activeId}
+      onClick={() => onSelect(c.id)}
+    />
+  );
 
   return (
     <div className="flex h-full w-full flex-col min-h-0">
@@ -299,14 +322,11 @@ function ConversationList({
                       ? "bg-rose-500 text-white"
                       : f.key === "activity"
                         ? "bg-violet-600 text-white"
-                        : f.key === "drafts"
-                          ? "bg-amber-600 text-white"
-                          : "bg-white/15 text-white"
+                        : "bg-white/15 text-white"
                     : "bg-white/[0.04] text-white/40 hover:text-white/70 border border-white/[0.08]"
                 }`}
               >
                 {f.key === "activity" && <AtSign size={10} />}
-                {f.key === "drafts" && <FilePenLine size={10} />}
                 {f.label}
                 {f.key === "unread" && totalUnread > 0 && !active && (
                   <span className="tabular-nums opacity-80">{totalUnread}</span>
@@ -315,9 +335,6 @@ function ConversationList({
                   <span className="tabular-nums opacity-80">
                     {activityUnread > 9 ? "9+" : activityUnread}
                   </span>
-                )}
-                {f.key === "drafts" && draftCount > 0 && !active && (
-                  <span className="tabular-nums opacity-80">{draftCount}</span>
                 )}
               </button>
             );
@@ -373,69 +390,54 @@ function ConversationList({
             <p className="px-3 py-10 text-center text-[12px] text-white/35">
               {filter === "unread"
                 ? "No unread conversations"
-                : filter === "drafts"
-                  ? "No drafts — start typing in a chat to save one"
-                  : "No conversations match"}
+                : "No conversations match"}
             </p>
           )}
-          {channels.length > 0 && (
+          {unreads.length > 0 && (
+            <div>
+              <SectionHeader
+                icon={Inbox}
+                label="Unreads"
+                count={unreads.length}
+                collapsible={false}
+              />
+              {unreads.map(renderConv)}
+            </div>
+          )}
+          {filter !== "unread" && channels.length > 0 && (
             <div>
               <SectionHeader
                 icon={Hash}
                 label="Channels"
                 count={channels.length}
-                open={openSections.channel}
+                open={sectionOpen("channel")}
                 onToggle={() => toggle("channel")}
               />
-              {openSections.channel &&
-                channels.map((c) => (
-                  <ConversationRow
-                    key={c.id}
-                    conv={c}
-                    active={c.id === activeId}
-                    onClick={() => onSelect(c.id)}
-                  />
-                ))}
+              {sectionOpen("channel") && channels.map(renderConv)}
             </div>
           )}
-          {groups.length > 0 && (
+          {filter !== "unread" && groups.length > 0 && (
             <div>
               <SectionHeader
                 icon={Users}
                 label="Groups"
                 count={groups.length}
-                open={openSections.group}
+                open={sectionOpen("group")}
                 onToggle={() => toggle("group")}
               />
-              {openSections.group &&
-                groups.map((c) => (
-                  <ConversationRow
-                    key={c.id}
-                    conv={c}
-                    active={c.id === activeId}
-                    onClick={() => onSelect(c.id)}
-                  />
-                ))}
+              {sectionOpen("group") && groups.map(renderConv)}
             </div>
           )}
-          {dms.length > 0 && (
+          {filter !== "unread" && dms.length > 0 && (
             <div>
               <SectionHeader
                 icon={User}
                 label="Direct messages"
                 count={dms.length}
-                open={openSections.dm}
+                open={sectionOpen("dm")}
                 onToggle={() => toggle("dm")}
               />
-              {openSections.dm &&
-                dms.map((c) => (
-                  <ConversationRow
-                    key={c.id}
-                    conv={c}
-                    active={c.id === activeId}
-                    onClick={() => onSelect(c.id)}
-                  />
-                ))}
+              {sectionOpen("dm") && dms.map(renderConv)}
             </div>
           )}
         </div>
@@ -628,7 +630,7 @@ function NewConversation({ conversations, onClose, onPick }) {
 }
 
 /**
- * Team Chat pane — sits under the staff time snapshot inside StaffPanel.
+ * Team Chat pane — fills the Command Center staff column.
  */
 export default function TeamChat() {
   const [conversations, setConversations] = useState(teamChatSeed.conversations);
@@ -651,7 +653,6 @@ export default function TeamChat() {
   const active = conversations.find((c) => c.id === activeId) || null;
   const messages = (activeId && messagesById[activeId]) || [];
   const activityUnread = activity.filter((a) => a.unread).length;
-  const draftCount = conversations.filter((c) => c.draft).length;
 
   const openChat = (id) => {
     setActiveId(id);
@@ -737,7 +738,7 @@ export default function TeamChat() {
       className="relative flex-1 min-h-0 flex flex-col overflow-hidden"
     >
       <div
-        className="relative shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/10"
+        className="relative shrink-0 flex items-center gap-2 h-[52px] px-3 border-b border-white/10"
         style={{ background: NAVY }}
       >
         {showChat && (
@@ -797,7 +798,6 @@ export default function TeamChat() {
               activeId={activeId}
               activity={activity}
               activityUnread={activityUnread}
-              draftCount={draftCount}
               onFilter={setFilter}
               onSelect={openChat}
               onNew={() => setNewOpen(true)}

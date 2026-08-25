@@ -9,3 +9,12 @@ export default function MetadataRow({ icon: Icon, label, value }) {
     </div>
   );
 }
+
+export function MetadataRowSimple({ label, value }) {
+  return (
+    <div className="flex items-center justify-between py-0.5">
+      <span className="text-xs text-white/30">{label}</span>
+      <span className="text-xs text-white/60 font-medium">{value}</span>
+    </div>
+  );
+}
