@@ -14,8 +14,8 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { currentUser, notifications } from "../../data/mockData";
+import { APP_GUTTER } from "./chrome";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
-import { AnimatedPopover } from "./OverlayPanel";
 import {
   myTimeTracking,
   timeOffBalance,
@@ -81,9 +81,90 @@ function inputClass() {
   return "w-full rounded-xl bg-white/[0.04] border border-white/[0.08] py-2 px-3 text-[12px] text-white placeholder:text-white/25 outline-none focus:border-white/15";
 }
 
-export default function CommandCenterNav() {
+function TimeStats() {
+  const { todayMinutes, activityPct, streakDays } = myTimeTracking;
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-2 py-1.5">
+        <p className="text-[8px] font-semibold uppercase tracking-wider text-white/30">Today</p>
+        <p className="text-[13px] font-bold font-mono text-white mt-0.5">{fmtMinutes(todayMinutes)}</p>
+      </div>
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-2 py-1.5">
+        <p className="text-[8px] font-semibold uppercase tracking-wider text-white/30">Activity</p>
+        <p className="text-[13px] font-bold font-mono text-accent-teal mt-0.5">{activityPct}%</p>
+      </div>
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-2 py-1.5">
+        <p className="text-[8px] font-semibold uppercase tracking-wider text-white/30">Streak</p>
+        <p className="text-[13px] font-bold font-mono text-white mt-0.5">{streakDays}d</p>
+      </div>
+    </div>
+  );
+}
+
+function TrackingBar({ clockedIn }) {
+  const { currentTask } = myTimeTracking;
+  if (!clockedIn) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-2.5 py-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-white/25 flex-shrink-0" />
+        <p className="text-[10px] text-white/45 truncate">Clocked out</p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-accent-teal/[0.08] border border-accent-teal/20 px-2.5 py-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent-teal pulse-dot flex-shrink-0" />
+      <p className="text-[10px] text-white/70 truncate">
+        Tracking <span className="font-mono text-accent-teal">{currentTask.ref}</span> ·{" "}
+        {currentTask.title}
+      </p>
+      <span className="ml-auto font-mono text-[10px] text-accent-teal flex-shrink-0">
+        {currentTask.elapsed}
+      </span>
+    </div>
+  );
+}
+
+function WeekHours() {
+  const { week, weeklyGoalHours } = myTimeTracking;
+  const weekMinutes = week.reduce((sum, d) => sum + d.minutes, 0);
+  const maxDay = Math.max(...week.map((d) => d.minutes), 1);
+  const goalPct = Math.min(100, Math.round((weekMinutes / (weeklyGoalHours * 60)) * 100));
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-white/30">This week</p>
+        <p className="text-[9px] font-mono text-white/40">
+          {fmtMinutes(weekMinutes)} <span className="text-white/20">/ {weeklyGoalHours}h goal</span>
+        </p>
+      </div>
+      <div className="flex items-end gap-1 h-12">
+        {week.map((d) => (
+          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 min-w-0 h-full justify-end">
+            <div
+              className={`w-full rounded-[3px] ${d.today ? "bg-accent-red/80" : d.minutes ? "bg-white/25" : "bg-white/[0.06]"}`}
+              style={{ height: `${Math.max(6, (d.minutes / maxDay) * 100)}%` }}
+              title={`${d.day} · ${fmtMinutes(d.minutes)}`}
+            />
+            <span className={`text-[8px] font-mono ${d.today ? "text-accent-red" : "text-white/25"}`}>
+              {d.day[0]}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 h-1 rounded-full bg-white/[0.06] overflow-hidden">
+        <div className="h-full rounded-full bg-accent-teal/70" style={{ width: `${goalPct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+const SETTLE_MS = 280;
+const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+export default function CommandCenterNav({ progress = 0, settling = false }) {
   const navRef = useRef(null);
-  const { setOpen, isOpenVisual } = useCommandCenter();
+  const { setOpen } = useCommandCenter();
   const [panel, setPanel] = useState(null);
   const [clockedIn, setClockedIn] = useState(true);
   const [requests, setRequests] = useState(seedRequests);
@@ -119,8 +200,8 @@ export default function CommandCenterNav() {
   }, []);
 
   useEffect(() => {
-    if (!isOpenVisual) setPanel(null);
-  }, [isOpenVisual]);
+    if (progress < 0.4) setPanel(null);
+  }, [progress]);
 
   const togglePanel = (id) => setPanel((prev) => (prev === id ? null : id));
 
@@ -147,13 +228,27 @@ export default function CommandCenterNav() {
     window.setTimeout(() => setPtoSent(false), 2400);
   };
 
+  const live = progress > 0.08;
+  const interactive = progress > 0.35;
+
   return (
     <div
       ref={navRef}
       data-command-interactive
-      className="command-center-nav absolute top-0 inset-x-0 z-20"
+      className="command-center-nav absolute top-0 z-20"
+      style={{
+        left: APP_GUTTER,
+        right: APP_GUTTER,
+        opacity: Math.min(1, progress * 1.35),
+        pointerEvents: interactive ? "auto" : "none",
+        visibility: live ? "visible" : "hidden",
+        transition: settling ? `opacity ${SETTLE_MS}ms ${SETTLE_EASE}` : "none",
+      }}
     >
-      <div className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-none border-x-0 border-t-0">
+      <div
+        className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl"
+        style={{ backgroundColor: "rgba(25, 30, 41, 0.42)" }}
+      >
         <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
         <button
           type="button"
@@ -239,10 +334,8 @@ export default function CommandCenterNav() {
         </div>
       </div>
 
-      <AnimatedPopover
-        open={panel === "profile"}
-        className="absolute left-4 top-full mt-2 w-[340px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
-      >
+      {panel === "profile" && (
+        <div className="absolute left-4 top-full mt-2 w-[340px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
           <div className="px-4 py-3.5 border-b border-white/[0.06] flex items-center gap-3">
             <img
               src={currentUser.avatar}
@@ -273,6 +366,10 @@ export default function CommandCenterNav() {
               </span>
             </div>
           </dl>
+          <div className="px-4 pb-3 space-y-2">
+            <TimeStats />
+            <TrackingBar clockedIn={clockedIn} />
+          </div>
           <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between">
             <p className="text-[10px] text-white/30">
               {usedPto} of {totalPto} PTO days used
@@ -285,15 +382,17 @@ export default function CommandCenterNav() {
               Request time off
             </button>
           </div>
-      </AnimatedPopover>
+        </div>
+      )}
 
-      <AnimatedPopover
-        open={panel === "timeoff"}
-        className="absolute left-4 top-full mt-2 w-[380px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
-      >
+      {panel === "timeoff" && (
+        <div className="absolute left-4 top-full mt-2 w-[380px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <p className="text-[13px] font-semibold text-white">Request time off</p>
             <p className="text-[11px] text-white/35 mt-0.5">Balances reset January 1.</p>
+          </div>
+          <div className="px-4 pt-3">
+            <WeekHours />
           </div>
           <div className="grid grid-cols-3 gap-1.5 px-4 pt-3">
             {Object.entries(timeOffBalance).map(([key, bal]) => (
@@ -397,15 +496,18 @@ export default function CommandCenterNav() {
               </div>
             ))}
           </div>
-      </AnimatedPopover>
+        </div>
+      )}
 
-      <AnimatedPopover
-        open={panel === "settings"}
-        className="absolute left-4 top-full mt-2 w-[320px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
-      >
+      {panel === "settings" && (
+        <div className="absolute left-4 top-full mt-2 w-[320px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <p className="text-[13px] font-semibold text-white">Profile settings</p>
             <p className="text-[11px] text-white/35 mt-0.5">Staff preferences for this workspace.</p>
+          </div>
+          <div className="px-4 py-3 space-y-2 border-b border-white/[0.06]">
+            <TimeStats />
+            <TrackingBar clockedIn={clockedIn} />
           </div>
           <div className="p-3 space-y-1">
             {[
@@ -440,12 +542,11 @@ export default function CommandCenterNav() {
           <div className="px-4 py-3 border-t border-white/[0.06] text-[11px] text-white/35">
             Workspace <span className="text-white/60 font-medium">{currentUser.workspace}</span>
           </div>
-      </AnimatedPopover>
+        </div>
+      )}
 
-      <AnimatedPopover
-        open={panel === "alerts"}
-        className="absolute right-4 top-full mt-2 w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden"
-      >
+      {panel === "alerts" && (
+        <div className="absolute right-4 top-full mt-2 w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden fade-in">
           <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
             <span className="text-[13px] font-semibold text-white">Notifications</span>
             <span className="text-[10px] text-accent-red font-semibold px-2 py-0.5 bg-accent-red/10 rounded-full">
@@ -472,7 +573,8 @@ export default function CommandCenterNav() {
               </div>
             ))}
           </div>
-      </AnimatedPopover>
+        </div>
+      )}
     </div>
   );
 }

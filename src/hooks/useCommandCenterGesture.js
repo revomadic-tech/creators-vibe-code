@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { APP_TICKER_H, SETTLE_MS, SETTLE_EASE } from "../components/layout/chrome";
+import { APP_TICKER_H } from "../components/layout/chrome";
 
+const SETTLE_MS = 280;
+const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const ACTIVATE_PX = 16;
-const DOCK_PROGRESS = 0.45;
 const AXIS_LOCK_RATIO = 1.35;
 const COMMIT_PROGRESS = 0.32;
 const GESTURE_TRAVEL_PX = 420;
@@ -109,13 +110,9 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
   const [progress, setProgress] = useState(open ? 1 : 0);
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
-  const [hasOpened, setHasOpened] = useState(Boolean(open));
-  const [docked, setDocked] = useState(open);
 
   const progressRef = useRef(progress);
   const openRef = useRef(open);
-  const hasOpenedRef = useRef(Boolean(open));
-  const dockedRef = useRef(open);
   const sessionRef = useRef(null);
   const activeRef = useRef(false);
   const settleTimer = useRef(null);
@@ -130,6 +127,11 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
+
+  useEffect(() => {
+    openRef.current = open;
+    if (!activeRef.current && !settling) setProgress(open ? 1 : 0);
+  }, [open, settling]);
 
   const clearEdgeReadyTimer = useCallback(() => {
     if (edgeReadyTimer.current != null) {
@@ -200,64 +202,18 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       );
       el.style.setProperty("clip-path", `inset(0 0 ${hidden}px 0)`);
       el.style.setProperty("-webkit-clip-path", `inset(0 0 ${hidden}px 0)`);
-      el.style.pointerEvents = p < 0.02 ? "none" : "";
-      // Keep content visible whenever the canvas is mounted; clip-path hides it.
-      el.style.removeProperty("content-visibility");
     },
     [canvasRef],
   );
 
-  const writeRoot = useCallback((p, { animate = false, live = false, committedOpen } = {}) => {
-    const root = document.documentElement;
-    root.style.setProperty("--cc-progress", String(p));
-    root.dataset.ccDocked = p > DOCK_PROGRESS ? "true" : "false";
-    root.dataset.ccSettling = animate ? "true" : "false";
-    root.dataset.ccDragging = live ? "true" : "false";
-    if (committedOpen != null) {
-      root.dataset.ccOpen = committedOpen ? "true" : "false";
-    }
-  }, []);
-
-  const syncDocked = useCallback((p) => {
-    const next = p > DOCK_PROGRESS;
-    if (next === dockedRef.current) return;
-    dockedRef.current = next;
-    setDocked(next);
-  }, []);
-
-  const markOpened = useCallback(() => {
-    if (hasOpenedRef.current) return;
-    hasOpenedRef.current = true;
-    setHasOpened(true);
-  }, []);
-
-  useEffect(() => {
-    openRef.current = open;
-    if (!activeRef.current && !settling) {
-      const p = open ? 1 : 0;
-      setProgress(p);
-      syncDocked(p);
-      writeRoot(p, { committedOpen: open });
-    }
-  }, [open, settling, syncDocked, writeRoot]);
-
   const writeShell = useCallback(
-    (next, animate, live = false) => {
-      const p = clamp01(next);
-      progressRef.current = p;
-      writeRoot(p, { animate, live });
+    (next, animate) => {
       const el = shellRef.current;
-      if (!el) {
-        writeClip(p, animate);
-        return;
-      }
-      const radius = `${p * 24}px`;
-      const shadow = p > 0.02 ? "0 -24px 60px -16px rgba(0,0,0,0.45)" : "none";
+      if (!el) return;
+      const p = clamp01(next);
       el.style.setProperty(
         "transition",
-        animate
-          ? `transform ${SETTLE_MS}ms ${SETTLE_EASE}, border-radius ${SETTLE_MS}ms ${SETTLE_EASE}, box-shadow ${SETTLE_MS}ms ${SETTLE_EASE}`
-          : "none",
+        animate ? `transform ${SETTLE_MS}ms ${SETTLE_EASE}` : "none",
         "important",
       );
       el.style.setProperty(
@@ -265,20 +221,14 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         `translate3d(0, ${p * visualTravel()}px, 0) scale(${1 - p * 0.015})`,
         "important",
       );
-      el.style.borderTopLeftRadius = radius;
-      el.style.borderTopRightRadius = radius;
-      el.style.boxShadow = shadow;
-      el.style.pointerEvents = p > 0.98 ? "none" : "";
       writeClip(p, animate);
     },
-    [shellRef, writeClip, writeRoot],
+    [shellRef, writeClip],
   );
 
   const commit = useCallback(
     (nextOpen) => {
       const target = nextOpen ? 1 : 0;
-      progressRef.current = target;
-      openRef.current = nextOpen;
       activeRef.current = false;
       sessionRef.current = null;
       wheelOrigin.current = null;
@@ -286,27 +236,19 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       bounceArmRef.current = 0;
       edgeReadyRef.current = false;
       writeBounce(0, false);
-      if (nextOpen) markOpened();
       setDragging(false);
       setSettling(true);
-      writeShell(target, true, false);
-      writeRoot(target, { animate: true, live: false, committedOpen: nextOpen });
+      writeShell(target, true);
       setProgress(target);
-      syncDocked(target);
       setOpen(nextOpen);
       if (settleTimer.current) window.clearTimeout(settleTimer.current);
       settleTimer.current = window.setTimeout(() => {
         setSettling(false);
         settleTimer.current = null;
-        writeRoot(progressRef.current, {
-          animate: false,
-          live: false,
-          committedOpen: openRef.current,
-        });
       }, SETTLE_MS);
       scheduleEdgeReady();
     },
-    [setOpen, writeShell, writeBounce, writeRoot, scheduleEdgeReady, markOpened, syncDocked],
+    [setOpen, writeShell, writeBounce, scheduleEdgeReady],
   );
 
   const release = useCallback(
@@ -325,11 +267,10 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
     (next) => {
       const p = clamp01(next);
       progressRef.current = p;
-      if (p > 0.001) markOpened();
-      writeShell(p, false, true);
-      syncDocked(p);
+      setProgress(p);
+      writeShell(p, false);
     },
-    [writeShell, markOpened, syncDocked],
+    [writeShell],
   );
 
   const applyWheel = useCallback(
@@ -455,7 +396,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
     canvasRef,
     applyWheel,
     open,
-    hasOpened,
     scheduleEdgeReady,
     invalidateEdgeReady,
     pulseBounce,
@@ -473,7 +413,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
     };
     canvas.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => canvas.removeEventListener("scroll", onScroll, true);
-  }, [canvasRef, open, hasOpened, invalidateEdgeReady, scheduleEdgeReady]);
+  }, [canvasRef, open, invalidateEdgeReady, scheduleEdgeReady]);
 
   useEffect(
     () => () => {
@@ -552,7 +492,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         session.kind = "gesture";
         activeRef.current = true;
         writeBounce(0, false);
-        markOpened();
         setDragging(true);
         try {
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -567,7 +506,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       }
       setLive(session.origin + -dy / travel());
     },
-    [setLive, canvasRef, shellRef, writeBounce, markOpened],
+    [setLive, canvasRef, shellRef, writeBounce],
   );
 
   const end = useCallback(
@@ -587,45 +526,47 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
 
   const p = clamp01(progress);
   const live = dragging || settling || activeRef.current;
-  const canvasMounted = hasOpened || open || live;
+  const y = typeof window === "undefined" ? 0 : p * visualTravel();
+  const canvasMounted = open || p > 0.001 || live;
+  const hiddenBelow =
+    typeof window === "undefined" ? 0 : Math.max(0, visualTravel() - y);
 
-  // Keep transform/clip-path off the React style object. Switching that object
-  // when `live` flips would wipe the imperative writes from setLive/commit.
-  const shellStyle = {
-    transformOrigin: "top center",
-    willChange: live ? "transform" : undefined,
-    backgroundColor: canvasMounted ? "#050506" : undefined,
-  };
+  const shellStyle = live
+    ? {
+        transformOrigin: "top center",
+        willChange: "transform",
+        pointerEvents: p > 0.98 ? "none" : undefined,
+        backgroundColor: canvasMounted ? "#050506" : undefined,
+      }
+    : {
+        transform: `translate3d(0, ${y}px, 0) scale(${1 - p * 0.015})`,
+        transformOrigin: "top center",
+        transition: `transform ${SETTLE_MS}ms ${SETTLE_EASE}`,
+        borderTopLeftRadius: p * 24,
+        borderTopRightRadius: p * 24,
+        boxShadow: p > 0.02 ? "0 -24px 60px -16px rgba(0,0,0,0.45)" : "none",
+        pointerEvents: p > 0.98 ? "none" : undefined,
+        backgroundColor: canvasMounted ? "#050506" : undefined,
+      };
 
-  const canvasStyle = {
-    willChange: live ? "clip-path" : undefined,
-  };
+  const canvasStyle = live
+    ? { willChange: "clip-path" }
+    : {
+        clipPath: `inset(0 0 ${hiddenBelow}px 0)`,
+        WebkitClipPath: `inset(0 0 ${hiddenBelow}px 0)`,
+      };
 
   useLayoutEffect(() => {
-    const initial = openRef.current ? 1 : 0;
-    writeRoot(initial, { committedOpen: openRef.current });
-    writeShell(initial, false, false);
-    // Initial chrome only — live updates go through setLive/commit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useLayoutEffect(() => {
-    writeShell(progressRef.current, settling && !dragging, dragging);
-  }, [canvasMounted, settling, dragging, writeShell]);
-
-  const toggle = useCallback(() => {
-    if (activeRef.current) return;
-    commit(!openRef.current);
-  }, [commit]);
-
-  const setOpenCommit = useCallback((next) => commit(Boolean(next)), [commit]);
+    if (!canvasMounted) return;
+    writeClip(progressRef.current, false);
+  }, [canvasMounted, writeClip]);
 
   return {
     progress: p,
     dragging: live,
     settling,
     canvasMounted,
-    isOpenVisual: docked,
+    isOpenVisual: p > 0.45,
     shellStyle,
     canvasStyle,
     pointerBind: {
@@ -634,7 +575,10 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       onPointerUp: end,
       onPointerCancel: end,
     },
-    toggle,
-    setOpen: setOpenCommit,
+    toggle: () => {
+      if (activeRef.current || settleTimer.current) return;
+      commit(!openRef.current);
+    },
+    setOpen: (next) => commit(Boolean(next)),
   };
 }
