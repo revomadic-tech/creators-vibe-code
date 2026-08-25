@@ -3,6 +3,8 @@
 :root {
   --app-ticker-h: 36px;
   --app-nav-h: 48px;
+  --app-gutter: 12px;
+  --app-radius: 16px;
   --cc-progress: 0;
   --cc-settle-ms: 280ms;
   --cc-settle-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -126,7 +128,6 @@
     position: absolute;
     border-radius: 50%;
     mix-blend-mode: screen;
-    will-change: transform, opacity;
     opacity: var(--orb-opacity);
   }
   .orb-smoke-a {
@@ -187,7 +188,9 @@
       opacity: calc(var(--orb-opacity) * 0.78);
     }
   }
-  html[data-cc-dragging="true"] .orb {
+  html[data-cc-dragging="true"] .orb,
+  html[data-cc-open="true"] .orb,
+  html[data-cc-hidden="true"] .orb {
     animation-play-state: paused;
   }
 
@@ -298,11 +301,7 @@
 
   /* ── Animations ── */
   .pulse-dot {
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    opacity: 0.9;
   }
 
   .stat-number {
@@ -381,10 +380,16 @@
   width: max-content;
   align-items: center;
   animation: top-header-marquee 45s linear infinite;
-  will-change: transform;
 }
 
 .top-header-marquee-track[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+html[data-cc-open="true"] .top-header-marquee-track,
+html[data-cc-open="true"] [data-decorative-motion],
+html[data-cc-hidden="true"] .top-header-marquee-track,
+html[data-cc-hidden="true"] [data-decorative-motion] {
   animation-play-state: paused;
 }
 
@@ -436,8 +441,36 @@
   }
 }
 
+.app-frame {
+  left: var(--app-gutter);
+  right: var(--app-gutter);
+}
+
+.app-frame-top {
+  border-top-left-radius: var(--app-radius);
+  border-top-right-radius: var(--app-radius);
+}
+
+.app-frame-bottom {
+  border-bottom-left-radius: var(--app-radius);
+  border-bottom-right-radius: var(--app-radius);
+}
+
+.app-frame-outline {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.app-panel {
+  border-radius: var(--app-radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
 .floating-nav {
   top: calc(var(--app-ticker-h) + var(--cc-progress) * (100dvh - var(--app-nav-h) - var(--app-ticker-h)));
+  left: var(--app-gutter);
+  right: var(--app-gutter);
 }
 html[data-cc-settling="true"] .floating-nav {
   transition: top var(--cc-settle-ms) var(--cc-settle-ease);

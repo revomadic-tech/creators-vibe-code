@@ -119,7 +119,7 @@ export default function AnnouncementTicker() {
 
   return (
     <div
-      className="absolute top-0 inset-x-0 z-[60] overflow-hidden border-b border-white/[0.08]"
+      className="app-frame app-frame-top app-frame-outline absolute top-0 z-[60] overflow-hidden"
       style={{ height: "var(--app-ticker-h)" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
