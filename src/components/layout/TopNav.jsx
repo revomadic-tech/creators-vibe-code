@@ -15,7 +15,7 @@ export default function TopNav({ pageTitle }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 border-b border-white/[0.06] bg-surface-800/60 backdrop-blur-xl sticky top-0 z-30">
+    <header className="h-14 flex items-center justify-between px-6 glass-nav sticky top-0 z-30 rounded-none border-x-0 border-t-0">
       <div className="flex items-center gap-4">
         <h1 className="text-base font-bold text-white tracking-tight">
           {pageTitle}

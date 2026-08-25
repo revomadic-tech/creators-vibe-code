@@ -396,7 +396,7 @@ function AssetFeatured({ asset, onClick }) {
             </button>
           </div>
         </div>
-        <div className="absolute bottom-2.5 left-3 right-3">
+        <div className="absolute bottom-4 left-3 right-3">
           <div className="flex items-center gap-1.5 mb-1">
             <StatusBadge status={asset.status} small />
           </div>

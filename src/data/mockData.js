@@ -9,6 +9,8 @@ export const currentUser = {
   role: "Senior Creative Director",
   avatar: FACE(12),
   workspace: "REVO Studios",
+  email: "kai@revostudios.com",
+  timezone: "Pacific Time (PT)",
 };
 
 export const teamMembers = [
@@ -401,6 +403,33 @@ export const notifications = [
   { id: 3, type: "approval", message: "REVO Kids Illustration Series approved", time: "1h ago", read: false },
   { id: 4, type: "assignment", message: "You've been assigned to Travel Campaign Q3", time: "2h ago", read: true },
   { id: 5, type: "delivery", message: "Brand Film final export completed", time: "3h ago", read: true },
+];
+
+export const announcements = [
+  {
+    id: 1,
+    title: "SS26 selects due Friday",
+    body: "Upload hero stills to the Sport gallery before 5pm PT",
+    priority: "urgent",
+    pinned: true,
+    authorName: "Sofia Andersson",
+  },
+  {
+    id: 2,
+    title: "Brand film color lock",
+    body: "Final grade session Thursday 2pm PT in Studio B",
+    priority: "normal",
+    pinned: false,
+    authorName: "Kai Montero",
+  },
+  {
+    id: 3,
+    title: "WAVE UGC pack landed",
+    body: "86 creator clips ready for selects",
+    priority: "normal",
+    pinned: false,
+    authorName: "Aisha Patel",
+  },
 ];
 
 export const recentActivity = [

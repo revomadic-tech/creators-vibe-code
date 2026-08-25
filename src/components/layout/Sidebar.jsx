@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import {
-  LayoutDashboard,
   Compass,
   FileText,
   Images,
@@ -13,8 +12,7 @@ import {
 import { useState } from "react";
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/discovery", icon: Compass, label: "Discovery" },
+  { to: "/", icon: Compass, label: "Discovery" },
   { to: "/briefs", icon: FileText, label: "Briefs" },
   { to: "/galleries", icon: Images, label: "Galleries" },
   { to: "/brand", icon: BookOpen, label: "Brand" },
@@ -30,7 +28,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen z-40 flex flex-col bg-surface-800 border-r border-white/[0.06] transition-all duration-300 ease-out ${
+      className={`fixed left-0 top-0 h-screen z-40 flex flex-col glass-panel border-r border-white/[0.08] transition-all duration-300 ease-out ${
         collapsed ? "w-[68px]" : "w-[220px]"
       }`}
     >

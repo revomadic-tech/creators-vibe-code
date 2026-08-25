@@ -63,7 +63,7 @@ export default function DetailPanel({
     if (!value) return;
     onClose?.();
     const params = new URLSearchParams({ [key]: value });
-    navigate(`/discovery?${params.toString()}`);
+    navigate(`/?${params.toString()}`);
   };
 
   const panelWidth = isAsset && railOpen ? 880 : 560;

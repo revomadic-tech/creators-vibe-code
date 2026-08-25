@@ -47,18 +47,7 @@ export default function HeroBanner({ onAssetClick }) {
   const inReviewCount = assets.filter((a) => a.status === "In Review").length;
 
   return (
-    <div className="relative w-full h-full overflow-hidden rounded-3xl">
-      {/* Gallery background mosaic */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 grid grid-cols-4 grid-rows-2 gap-0">
-          {galleries.slice(0, 8).map((g, i) => (
-            <img key={g.id} src={g.thumbnail || g.coverImages?.[0]} alt="" className="w-full h-full object-cover" style={{ opacity: 0.25 - i * 0.02 }} loading="lazy" />
-          ))}
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/50" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/40" />
-        <div className="absolute inset-0 bg-gradient-to-br from-accent-red/[0.04] via-transparent to-accent-purple/[0.03]" />
-      </div>
+    <div className="relative w-full h-full overflow-hidden rounded-3xl glass-panel">
 
       <div className="relative z-10 h-full">
         <div className="grid grid-cols-12 gap-4 p-6 h-full">
@@ -139,7 +128,7 @@ export default function HeroBanner({ onAssetClick }) {
                 <span className="text-[8px] text-white/12 font-mono ml-1">{portraitItems.length} new</span>
               </div>
               <button
-                onClick={() => window.location.href = "/discovery"}
+                onClick={() => window.location.href = "/"}
                 className="flex items-center gap-1 text-[9px] font-semibold text-white/25 hover:text-white/55 transition-colors"
               >
                 View All <ArrowUpRight size={9} />
@@ -147,7 +136,7 @@ export default function HeroBanner({ onAssetClick }) {
             </div>
 
             <div className="flex-1 relative overflow-hidden rounded-xl">
-              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-surface-900/50 to-transparent z-10 pointer-events-none" />
               <div className="overflow-y-auto h-full custom-scroll">
                 <div className="grid grid-cols-4 gap-1.5">
                   {portraitItems.map((item) => (
@@ -238,7 +227,7 @@ export default function HeroBanner({ onAssetClick }) {
 
 function MiniStat({ label, value, accent }) {
   return (
-    <div className="flex-1 px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-center">
+    <div className="flex-1 px-2 py-1.5 rounded-lg glass-pill text-center">
       <p className="text-[7px] text-white/18 font-medium uppercase tracking-wider">{label}</p>
       <p className={`text-[15px] font-black tracking-tight leading-none mt-0.5 ${accent ? "text-accent-teal" : "text-white/65"}`}>{value}</p>
     </div>
