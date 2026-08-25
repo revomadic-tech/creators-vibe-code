@@ -263,6 +263,7 @@ export default function Discovery() {
       <div className="flex-1 overflow-hidden flex flex-col" id="discovery-scroll">
         <div className="fade-in pt-14 flex-1 flex overflow-hidden min-h-0">
           <FolderTree
+            key="library-collapsed-v3"
             assets={assets}
             products={products}
             partners={partners}

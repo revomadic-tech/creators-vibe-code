@@ -45,9 +45,7 @@ export default function FolderTree({
     [assets, products, partners, categories, assetTypes, briefs, typeIcons]
   );
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState(() =>
-    new Set(tree.filter((n) => n.children?.length).map((n) => n.id))
-  );
+  const [openIds, setOpenIds] = useState(() => new Set());
 
   const visibleTree = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,7 +63,7 @@ export default function FolderTree({
 
   const toggleExpand = (id, e) => {
     e?.stopPropagation();
-    setExpanded((prev) => {
+    setOpenIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -114,6 +112,7 @@ export default function FolderTree({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            autoComplete="off"
             placeholder="Search folders..."
             className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg py-1.5 pl-7 pr-7 text-[11px] text-white placeholder:text-white/20 outline-none focus:border-white/15 focus:bg-white/[0.06] transition-all duration-200"
           />
@@ -135,7 +134,7 @@ export default function FolderTree({
             node={node}
             depth={0}
             selectedId={selectedId}
-            expanded={query ? new Set(collectIds(visibleTree)) : expanded}
+            openIds={query ? new Set(collectIds(visibleTree)) : openIds}
             onToggle={toggleExpand}
             onSelect={onSelect}
           />
@@ -162,9 +161,9 @@ function collectIds(nodes) {
   return ids;
 }
 
-function TreeNode({ node, depth, selectedId, expanded, onToggle, onSelect }) {
+function TreeNode({ node, depth, selectedId, openIds, onToggle, onSelect }) {
   const hasChildren = node.children?.length > 0;
-  const isOpen = hasChildren && expanded.has(node.id);
+  const isOpen = Boolean(hasChildren && openIds.has(node.id));
   const isSelected = selectedId === node.id;
   const Icon = node.icon || (isOpen ? FolderOpen : Folder);
 
@@ -213,7 +212,7 @@ function TreeNode({ node, depth, selectedId, expanded, onToggle, onSelect }) {
             node={child}
             depth={depth + 1}
             selectedId={selectedId}
-            expanded={expanded}
+            openIds={openIds}
             onToggle={onToggle}
             onSelect={onSelect}
           />
