@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import FloatingNav from "./FloatingNav";
 import CommandCenterNav from "./CommandCenterNav";
 import AnnouncementTicker from "./AnnouncementTicker";
@@ -8,6 +8,15 @@ import { CommandCenterProvider } from "../../contexts/CommandCenterContext";
 import { useCommandCenterGesture } from "../../hooks/useCommandCenterGesture";
 import CommandCenter from "../../pages/CommandCenter";
 
+function StudioOutlet() {
+  const { pathname } = useLocation();
+  return (
+    <div key={pathname} className="flex flex-1 min-h-0 flex-col overflow-hidden studio-page-fade">
+      <Outlet />
+    </div>
+  );
+}
+
 export default function AppShell() {
   const [open, setOpen] = useState(false);
   const shellRef = useRef(null);
@@ -15,40 +24,41 @@ export default function AppShell() {
   const gesture = useCommandCenterGesture(open, setOpen, shellRef, canvasRef);
 
   useEffect(() => {
-    if (window.location.hash === "#command-center") setOpen(true);
+    if (window.location.hash === "#command-center") gesture.setOpen(true);
+    // First-paint hash only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const commandValue = useMemo(
+    () => ({
+      open,
+      setOpen: gesture.setOpen,
+      toggle: gesture.toggle,
+      isOpenVisual: gesture.isOpenVisual,
+    }),
+    [open, gesture.setOpen, gesture.toggle, gesture.isOpenVisual],
+  );
+
   return (
-    <CommandCenterProvider
-      value={{
-        open,
-        setOpen: gesture.setOpen,
-        toggle: gesture.toggle,
-        isOpenVisual: gesture.isOpenVisual,
-      }}
-    >
+    <CommandCenterProvider value={commandValue}>
       <div className="h-screen overflow-hidden lustrous-bg">
         <div className="ambient-orbs" aria-hidden="true">
           <span className="orb orb-smoke-a" />
           <span className="orb orb-smoke-b" />
-          <span className="orb orb-red" />
-          <span className="orb orb-purple" />
-          <span className="orb orb-orange" />
-          <span className="orb orb-teal" />
-          <span className="orb orb-blue" />
         </div>
         <div className="ui-glass-veil" aria-hidden="true" />
         <AnnouncementTicker />
-        <FloatingNav progress={gesture.progress} settling={gesture.settling} />
+        <FloatingNav />
 
         {gesture.canvasMounted && (
           <div
             ref={canvasRef}
+            data-cc-canvas
             className="absolute inset-x-0 bottom-0 z-[8] flex flex-col"
             style={{ top: APP_TICKER_H, ...gesture.canvasStyle }}
             {...gesture.pointerBind}
           >
-            <CommandCenterNav progress={gesture.progress} settling={gesture.settling} />
+            <CommandCenterNav />
             <CommandCenter />
           </div>
         )}
@@ -61,20 +71,18 @@ export default function AppShell() {
           style={{ top: APP_TICKER_H, ...gesture.shellStyle }}
           {...gesture.pointerBind}
         >
-          {gesture.progress < 0.98 && (
-            <div className="absolute top-16 inset-x-0 z-30 flex justify-center pointer-events-none">
-              <button
-                type="button"
-                data-command-gesture-handle
-                onClick={() => gesture.setOpen(true)}
-                className="pointer-events-auto touch-none flex flex-col items-center gap-1 px-8 py-2 text-white/40 hover:text-white/70 transition-colors cursor-grab active:cursor-grabbing"
-                aria-label="Open Command Center"
-              >
-                <span className="w-12 h-1.5 rounded-full bg-white/35" />
-              </button>
-            </div>
-          )}
-          <Outlet />
+          <div className="command-gesture-handle-wrap absolute top-16 inset-x-0 z-30 flex justify-center">
+            <button
+              type="button"
+              data-command-gesture-handle
+              onClick={() => gesture.setOpen(true)}
+              className="touch-none flex flex-col items-center gap-1 px-8 py-2 text-white/40 hover:text-white/70 transition-colors cursor-grab active:cursor-grabbing"
+              aria-label="Open Command Center"
+            >
+              <span className="w-12 h-1.5 rounded-full bg-white/35" />
+            </button>
+          </div>
+          <StudioOutlet />
         </main>
       </div>
     </CommandCenterProvider>

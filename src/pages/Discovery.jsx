@@ -237,21 +237,23 @@ export default function Discovery() {
           onBack={() => setActiveProduct(null)}
           onAssetClick={setSelectedAsset}
         />
-        {selectedAsset && (
-          <DetailPanel
-            item={selectedAsset}
-            type="asset"
-            onClose={() => setSelectedAsset(null)}
-            relatedAssets={assets
-              .filter(
-                (a) =>
-                  a.id !== selectedAsset.id &&
-                  a.product === selectedAsset.product
-              )
-              .slice(0, 4)}
-            onSelectRelated={setSelectedAsset}
-          />
-        )}
+        <DetailPanel
+          item={selectedAsset}
+          type="asset"
+          onClose={() => setSelectedAsset(null)}
+          relatedAssets={
+            selectedAsset
+              ? assets
+                  .filter(
+                    (a) =>
+                      a.id !== selectedAsset.id &&
+                      a.product === selectedAsset.product
+                  )
+                  .slice(0, 4)
+              : []
+          }
+          onSelectRelated={setSelectedAsset}
+        />
       </>
     );
   }
@@ -720,21 +722,23 @@ export default function Discovery() {
         </div>
       </div>
 
-      {selectedAsset && (
-        <DetailPanel
-          item={selectedAsset}
-          type="asset"
-          onClose={() => setSelectedAsset(null)}
-          relatedAssets={assets
-            .filter(
-              (a) =>
-                a.id !== selectedAsset.id &&
-                a.product === selectedAsset.product
-            )
-            .slice(0, 4)}
-          onSelectRelated={setSelectedAsset}
-        />
-      )}
+      <DetailPanel
+        item={selectedAsset}
+        type="asset"
+        onClose={() => setSelectedAsset(null)}
+        relatedAssets={
+          selectedAsset
+            ? assets
+                .filter(
+                  (a) =>
+                    a.id !== selectedAsset.id &&
+                    a.product === selectedAsset.product
+                )
+                .slice(0, 4)
+            : []
+        }
+        onSelectRelated={setSelectedAsset}
+      />
     </>
   );
 }

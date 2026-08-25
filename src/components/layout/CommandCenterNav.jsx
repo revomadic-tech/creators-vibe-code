@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { currentUser, notifications } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import { AnimatedPopover } from "./OverlayPanel";
 import {
   myTimeTracking,
   timeOffBalance,
@@ -80,12 +81,9 @@ function inputClass() {
   return "w-full rounded-xl bg-white/[0.04] border border-white/[0.08] py-2 px-3 text-[12px] text-white placeholder:text-white/25 outline-none focus:border-white/15";
 }
 
-const SETTLE_MS = 280;
-const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-
-export default function CommandCenterNav({ progress = 0, settling = false }) {
+export default function CommandCenterNav() {
   const navRef = useRef(null);
-  const { setOpen } = useCommandCenter();
+  const { setOpen, isOpenVisual } = useCommandCenter();
   const [panel, setPanel] = useState(null);
   const [clockedIn, setClockedIn] = useState(true);
   const [requests, setRequests] = useState(seedRequests);
@@ -121,8 +119,8 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
   }, []);
 
   useEffect(() => {
-    if (progress < 0.4) setPanel(null);
-  }, [progress]);
+    if (!isOpenVisual) setPanel(null);
+  }, [isOpenVisual]);
 
   const togglePanel = (id) => setPanel((prev) => (prev === id ? null : id));
 
@@ -149,20 +147,11 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
     window.setTimeout(() => setPtoSent(false), 2400);
   };
 
-  const live = progress > 0.08;
-  const interactive = progress > 0.35;
-
   return (
     <div
       ref={navRef}
       data-command-interactive
-      className="absolute top-0 inset-x-0 z-20"
-      style={{
-        opacity: Math.min(1, progress * 1.35),
-        pointerEvents: interactive ? "auto" : "none",
-        visibility: live ? "visible" : "hidden",
-        transition: settling ? `opacity ${SETTLE_MS}ms ${SETTLE_EASE}` : "none",
-      }}
+      className="command-center-nav absolute top-0 inset-x-0 z-20"
     >
       <div className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-none border-x-0 border-t-0">
         <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
@@ -250,8 +239,10 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
         </div>
       </div>
 
-      {panel === "profile" && (
-        <div className="absolute left-4 top-full mt-2 w-[340px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
+      <AnimatedPopover
+        open={panel === "profile"}
+        className="absolute left-4 top-full mt-2 w-[340px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
+      >
           <div className="px-4 py-3.5 border-b border-white/[0.06] flex items-center gap-3">
             <img
               src={currentUser.avatar}
@@ -294,11 +285,12 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
               Request time off
             </button>
           </div>
-        </div>
-      )}
+      </AnimatedPopover>
 
-      {panel === "timeoff" && (
-        <div className="absolute left-4 top-full mt-2 w-[380px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
+      <AnimatedPopover
+        open={panel === "timeoff"}
+        className="absolute left-4 top-full mt-2 w-[380px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
+      >
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <p className="text-[13px] font-semibold text-white">Request time off</p>
             <p className="text-[11px] text-white/35 mt-0.5">Balances reset January 1.</p>
@@ -405,11 +397,12 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+      </AnimatedPopover>
 
-      {panel === "settings" && (
-        <div className="absolute left-4 top-full mt-2 w-[320px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden fade-in">
+      <AnimatedPopover
+        open={panel === "settings"}
+        className="absolute left-4 top-full mt-2 w-[320px] glass-panel rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden"
+      >
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <p className="text-[13px] font-semibold text-white">Profile settings</p>
             <p className="text-[11px] text-white/35 mt-0.5">Staff preferences for this workspace.</p>
@@ -447,11 +440,12 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
           <div className="px-4 py-3 border-t border-white/[0.06] text-[11px] text-white/35">
             Workspace <span className="text-white/60 font-medium">{currentUser.workspace}</span>
           </div>
-        </div>
-      )}
+      </AnimatedPopover>
 
-      {panel === "alerts" && (
-        <div className="absolute right-4 top-full mt-2 w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden fade-in">
+      <AnimatedPopover
+        open={panel === "alerts"}
+        className="absolute right-4 top-full mt-2 w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden"
+      >
           <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
             <span className="text-[13px] font-semibold text-white">Notifications</span>
             <span className="text-[10px] text-accent-red font-semibold px-2 py-0.5 bg-accent-red/10 rounded-full">
@@ -478,8 +472,7 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+      </AnimatedPopover>
     </div>
   );
 }
