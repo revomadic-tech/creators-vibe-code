@@ -261,7 +261,7 @@ export default function Discovery() {
   return (
     <>
       <div className="flex-1 overflow-hidden flex flex-col" id="discovery-scroll">
-        <div className="fade-in pt-14 flex-1 flex overflow-hidden min-h-0">
+        <div className="fade-in pt-14 px-2 pb-2 flex-1 flex gap-2 overflow-hidden min-h-0">
           <FolderTree
             key="library-collapsed-v3"
             assets={assets}
@@ -276,7 +276,7 @@ export default function Discovery() {
             collapsed={folderCollapsed}
             onToggleCollapsed={() => setFolderCollapsed((c) => !c)}
           />
-          <div className="flex-1 min-w-0 overflow-y-auto">
+          <div className="app-panel flex-1 min-w-0 overflow-y-auto">
             {/* Command Bar */}
             <div className="sticky top-0 z-20 command-bar px-6 py-3">
             <div>

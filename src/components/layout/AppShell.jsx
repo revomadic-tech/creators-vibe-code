@@ -54,7 +54,7 @@ export default function AppShell() {
           <div
             ref={canvasRef}
             data-cc-canvas
-            className="absolute inset-x-0 bottom-0 z-[8] flex flex-col"
+            className="app-frame app-frame-bottom app-frame-outline absolute bottom-0 z-[8] flex flex-col overflow-hidden"
             style={{ top: APP_TICKER_H, ...gesture.canvasStyle }}
             {...gesture.pointerBind}
           >
@@ -65,7 +65,7 @@ export default function AppShell() {
 
         <main
           ref={shellRef}
-          className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden ${
+          className={`app-frame app-frame-bottom app-frame-outline absolute bottom-0 z-10 flex flex-col overflow-hidden ${
             gesture.canvasMounted ? "bg-[#050506] isolate" : "bg-transparent"
           }`}
           style={{ top: APP_TICKER_H, ...gesture.shellStyle }}

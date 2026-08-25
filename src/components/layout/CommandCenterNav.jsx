@@ -139,7 +139,7 @@ export default function CommandCenterNav() {
       data-command-interactive
       className="command-center-nav absolute top-0 inset-x-0 z-20"
     >
-      <div className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-none border-x-0 border-t-0">
+      <div className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-none border-x border-t-0">
         <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
         <button
           type="button"

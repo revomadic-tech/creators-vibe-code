@@ -587,7 +587,9 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
 
   const p = clamp01(progress);
   const live = dragging || settling || activeRef.current;
-  const canvasMounted = hasOpened || open || live;
+  // Unmount when fully closed so the board/staff tree does not keep
+  // running animations and layout after the first open.
+  const canvasMounted = open || live || p > 0.02;
 
   // Keep transform/clip-path off the React style object. Switching that object
   // when `live` flips would wipe the imperative writes from setLive/commit.

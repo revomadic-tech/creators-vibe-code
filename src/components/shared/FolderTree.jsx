@@ -73,7 +73,7 @@ export default function FolderTree({
 
   if (collapsed) {
     return (
-      <aside className="w-11 h-full flex-shrink-0 border-r border-white/[0.06] bg-black/20 flex flex-col items-center py-3 gap-2">
+      <aside className="app-panel w-11 flex-shrink-0 flex flex-col items-center py-3 gap-2">
         <button
           onClick={onToggleCollapsed}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-all duration-200"
@@ -89,7 +89,7 @@ export default function FolderTree({
   }
 
   return (
-    <aside className="w-[232px] h-full flex-shrink-0 border-r border-white/[0.06] bg-black/25 flex flex-col min-h-0 overflow-hidden">
+    <aside className="app-panel w-[232px] flex-shrink-0 flex flex-col min-h-0">
       <div className="px-3 pt-3 pb-2.5 border-b border-white/[0.04] flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <p className="text-[10px] font-bold text-white/35 uppercase tracking-wider">
@@ -127,7 +127,7 @@ export default function FolderTree({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scroll py-1.5 px-1.5">
+      <div className="flex-1 overflow-y-auto custom-scroll py-2 px-2">
         {visibleTree.map((node) => (
           <TreeNode
             key={node.id}
@@ -176,7 +176,7 @@ function TreeNode({ node, depth, selectedId, openIds, onToggle, onSelect }) {
             ? "bg-white/[0.08] text-white"
             : "text-white/45 hover:text-white/80 hover:bg-white/[0.04]"
         }`}
-        style={{ paddingLeft: 6 + depth * 12 }}
+        style={{ paddingLeft: 8 + depth * 12 }}
       >
         {hasChildren ? (
           <span className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center text-white/25">
