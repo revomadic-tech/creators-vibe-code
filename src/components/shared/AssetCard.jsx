@@ -61,9 +61,19 @@ export default function AssetCard({
   return (
     <div
       onClick={() => onClick?.(asset)}
-      className="group rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
+      className={
+        isCompact
+          ? "group min-w-0 cursor-pointer"
+          : "group rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
+      }
     >
-      <div className={`relative overflow-hidden ${isCompact ? "aspect-square" : "aspect-[4/3]"}`}>
+      <div
+        className={`relative overflow-hidden ${
+          isCompact
+            ? "aspect-square rounded-2xl glass-card card-focus-ring"
+            : "aspect-[4/3]"
+        }`}
+      >
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -128,53 +138,51 @@ export default function AssetCard({
         )}
       </div>
 
-      <div className={isCompact ? "px-2 py-1.5" : "p-3"}>
-        <div className={`flex items-start justify-between gap-1.5 ${isCompact ? "" : "mb-1.5"}`}>
-          <h3 className="text-[11px] font-semibold text-white leading-tight line-clamp-1">
-            {asset.title}
-          </h3>
-          {!isCompact && <StatusBadge status={asset.status} small />}
-        </div>
+      {isCompact ? (
+        <p className="mt-1.5 px-0.5 text-[11px] font-medium text-white/75 leading-snug line-clamp-2">
+          {asset.title}
+        </p>
+      ) : (
+        <div className="p-3">
+          <div className="flex items-start justify-between gap-1.5 mb-1.5">
+            <h3 className="text-[11px] font-semibold text-white leading-tight line-clamp-1">
+              {asset.title}
+            </h3>
+            <StatusBadge status={asset.status} small />
+          </div>
 
-        <div className={`flex items-center gap-1 text-[10px] text-white/30 leading-none ${isCompact ? "mt-0.5" : "mb-1.5"}`}>
-          <span className="font-medium text-white/50 truncate">{asset.product}</span>
-          {!isCompact && (
-            <>
-              <span className="text-white/12">·</span>
-              <span>{asset.partner}</span>
-              <span className="text-white/12">·</span>
-              <span className="text-white/20">{asset.category}</span>
-            </>
-          )}
-        </div>
+          <div className="flex items-center gap-1 text-[10px] text-white/30 leading-none mb-1.5">
+            <span className="font-medium text-white/50 truncate">{asset.product}</span>
+            <span className="text-white/12">·</span>
+            <span>{asset.partner}</span>
+            <span className="text-white/12">·</span>
+            <span className="text-white/20">{asset.category}</span>
+          </div>
 
-        {!isCompact && (
-          <>
-            {asset.briefTitle && (
-              <div className="flex items-center gap-1 mb-2">
-                <FileText size={8} className="text-accent-red/50 flex-shrink-0" />
-                <span className="text-[9px] text-accent-red/60 truncate font-medium">
-                  {asset.briefTitle}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
-              <div className="flex items-center gap-1.5">
-                <img
-                  src={asset.editorAvatar}
-                  alt=""
-                  className="w-4 h-4 rounded-full object-cover ring-1 ring-white/[0.06]"
-                />
-                <span className="text-[10px] text-white/35">{asset.editor}</span>
-              </div>
-              <span className="text-[9px] text-white/18 font-mono">
-                {asset.dateSubmitted}
+          {asset.briefTitle && (
+            <div className="flex items-center gap-1 mb-2">
+              <FileText size={8} className="text-accent-red/50 flex-shrink-0" />
+              <span className="text-[9px] text-accent-red/60 truncate font-medium">
+                {asset.briefTitle}
               </span>
             </div>
-          </>
-        )}
-      </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+            <div className="flex items-center gap-1.5">
+              <img
+                src={asset.editorAvatar}
+                alt=""
+                className="w-4 h-4 rounded-full object-cover ring-1 ring-white/[0.06]"
+              />
+              <span className="text-[10px] text-white/35">{asset.editor}</span>
+            </div>
+            <span className="text-[9px] text-white/18 font-mono">
+              {asset.dateSubmitted}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

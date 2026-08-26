@@ -12,18 +12,18 @@ import {
   Star,
   Package,
   FileText,
-  Users,
   Layers,
   Sparkles,
 } from "lucide-react";
 
 export default function FolderTree({
-  assets,
-  products,
-  partners,
-  categories,
-  assetTypes,
-  briefs,
+  totalCount = 0,
+  newCount = 0,
+  featuredCount = 0,
+  products = [],
+  tags = [],
+  typeCounts = {},
+  galleries = [],
   typeIcons,
   selectedId,
   onSelect,
@@ -32,15 +32,16 @@ export default function FolderTree({
   const tree = useMemo(
     () =>
       buildLibraryTree({
-        assets,
+        totalCount,
+        newCount,
+        featuredCount,
         products,
-        partners,
-        categories,
-        assetTypes,
-        briefs,
+        tags,
+        typeCounts,
+        galleries,
         typeIcons,
       }),
-    [assets, products, partners, categories, assetTypes, briefs, typeIcons]
+    [totalCount, newCount, featuredCount, products, tags, typeCounts, galleries, typeIcons]
   );
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(() => new Set());
@@ -202,44 +203,68 @@ function TreeNode({ node, depth, selectedId, expanded, onToggle, onSelect }) {
 }
 
 function buildLibraryTree({
-  assets,
+  totalCount,
+  newCount,
+  featuredCount,
   products,
-  partners,
-  categories,
-  assetTypes,
-  briefs,
+  tags,
+  typeCounts,
+  galleries,
   typeIcons,
 }) {
-  const countEq = (key, value) => assets.filter((a) => a[key] === value).length;
   const leaf = (kind, value, label, extra = {}) => ({
     id: `${kind}:${value}`,
     kind,
     value,
     label,
-    count: extra.count ?? countEq(extra.countKey || kindToAssetKey(kind), value),
+    count: extra.count,
     icon: extra.icon,
+    assetIds: extra.assetIds,
   });
+
+  const typeLeaves = [
+    typeCounts?.image > 0 &&
+      leaf("type", "Photo", "Photo", {
+        count: typeCounts.image,
+        icon: typeIcons?.Photo,
+      }),
+    typeCounts?.video > 0 &&
+      leaf("type", "Video", "Video", {
+        count: typeCounts.video,
+        icon: typeIcons?.Video,
+      }),
+    typeCounts?.document > 0 &&
+      leaf("type", "Graphic", "Graphic", {
+        count: typeCounts.document,
+        icon: typeIcons?.Graphic,
+      }),
+    typeCounts?.audio > 0 &&
+      leaf("type", "Motion", "Motion", {
+        count: typeCounts.audio,
+        icon: typeIcons?.Motion,
+      }),
+  ].filter(Boolean);
 
   return [
     {
       id: "all",
       kind: "all",
       label: "All Assets",
-      count: assets.length,
+      count: totalCount,
       icon: Inbox,
     },
     {
       id: "new",
       kind: "new",
       label: "Just Landed",
-      count: assets.filter((a) => a.isNew).length,
+      count: newCount,
       icon: Upload,
     },
     {
       id: "featured",
       kind: "featured",
       label: "Featured",
-      count: assets.filter((a) => a.isFeatured).length,
+      count: featuredCount,
       icon: Star,
     },
     {
@@ -248,53 +273,40 @@ function buildLibraryTree({
       label: "Products",
       count: products.length,
       icon: Package,
-      children: products.map((p) => leaf("product", p, p)),
-    },
-    {
-      id: "campaigns",
-      kind: "group",
-      label: "Campaigns",
-      count: briefs.length,
-      icon: FileText,
-      children: briefs.map((b) =>
-        leaf("campaign", b.title, b.title, {
-          count: assets.filter((a) => a.briefTitle === b.title).length,
+      children: products.map((p) =>
+        leaf("product", p.id, p.name || p.title, {
+          count: p.assetCount ?? p.stats?.assets,
         })
       ),
     },
-    {
-      id: "partners",
+    galleries.length > 0 && {
+      id: "galleries",
       kind: "group",
-      label: "Partners",
-      count: partners.length,
-      icon: Users,
-      children: partners.map((p) => leaf("partner", p, p)),
+      label: "Galleries",
+      count: galleries.length,
+      icon: FileText,
+      children: galleries.map((g) =>
+        leaf("gallery", String(g.id), g.title, {
+          count: g.assetCount ?? g.assetIds?.length,
+          assetIds: g.assetIds,
+        })
+      ),
     },
     {
       id: "categories",
       kind: "group",
       label: "Categories",
-      count: categories.length,
+      count: tags.length,
       icon: Layers,
-      children: categories.map((c) => leaf("category", c, c)),
+      children: tags.map((c) => leaf("category", c, c)),
     },
     {
       id: "types",
       kind: "group",
       label: "Types",
-      count: assetTypes.length,
+      count: typeLeaves.length,
       icon: Sparkles,
-      children: assetTypes.map((t) =>
-        leaf("type", t, t, { icon: typeIcons?.[t] })
-      ),
+      children: typeLeaves,
     },
-  ];
-}
-
-function kindToAssetKey(kind) {
-  if (kind === "product") return "product";
-  if (kind === "partner") return "partner";
-  if (kind === "category") return "category";
-  if (kind === "type") return "type";
-  return kind;
+  ].filter(Boolean);
 }

@@ -45,10 +45,24 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    overscroll-behavior-x: none;
   }
 
   body {
     margin: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
     overflow: hidden;
   }
 
@@ -528,10 +542,10 @@
 
 @keyframes header-swirl-spin {
   0% {
-    transform: rotate(0deg) scale(1.35);
+    transform: rotate(0deg);
   }
   100% {
-    transform: rotate(360deg) scale(1.35);
+    transform: rotate(360deg);
   }
 }
 

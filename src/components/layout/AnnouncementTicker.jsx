@@ -97,7 +97,7 @@ function TickerChip({ entry, selected, inertClone, onSelect }) {
 }
 
 export default function AnnouncementTicker() {
-  const { open, toggle } = useCommandCenter();
+  const { open, toggle, selectedTaskId, openTask, findTask } = useCommandCenter();
   const [selectedKey, setSelectedKey] = useState(null);
   const [copies, setCopies] = useState(2);
 
@@ -170,6 +170,12 @@ export default function AnnouncementTicker() {
 
   const activate = (entry) => {
     setSelectedKey(entryKey(entry));
+    const taskRef =
+      entry.kind === "notification" ? entry.notification.taskRef : null;
+    if (taskRef && openTask(taskRef)) {
+      if (!open) toggle();
+      return;
+    }
     if (!open) toggle();
   };
 
@@ -187,15 +193,16 @@ export default function AnnouncementTicker() {
       }}
     >
       <div className="absolute inset-0 bg-[#0c0e12]" />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 size-[220%] -translate-x-1/2 -translate-y-1/2 opacity-50"
-        style={{
-          background:
-            "conic-gradient(from 40deg at 50% 50%, #1a1210 0deg, rgba(232,68,46,0.28) 90deg, #0c0e12 180deg, rgba(242,107,58,0.22) 270deg, #1a1210 360deg)",
-          animation: "header-swirl-spin 28s linear infinite",
-        }}
-      />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div
+          className="absolute inset-[-80%] opacity-50"
+          style={{
+            background:
+              "conic-gradient(from 40deg at 50% 50%, #1a1210 0deg, rgba(232,68,46,0.28) 90deg, #0c0e12 180deg, rgba(242,107,58,0.22) 270deg, #1a1210 360deg)",
+            animation: "header-swirl-spin 28s linear infinite",
+          }}
+        />
+      </div>
       <div className="absolute inset-0 bg-[#0c0e12]/45" />
       <div className="absolute left-[10px] top-[7px] bottom-[7px] w-[3px] rounded-full opacity-70 bg-gradient-to-b from-amber-400 via-orange-400 to-accent-red" />
 
@@ -219,11 +226,19 @@ export default function AnnouncementTicker() {
                   >
                     {tickerItems.map((entry) => {
                       const key = entryKey(entry);
+                      const linkedTask =
+                        entry.kind === "notification"
+                          ? findTask(entry.notification.taskRef)
+                          : null;
                       return (
                         <TickerChip
                           key={`${dup}-${key}`}
                           entry={entry}
-                          selected={selectedKey === key}
+                          selected={
+                            linkedTask
+                              ? linkedTask.id === selectedTaskId
+                              : selectedKey === key
+                          }
                           inertClone={dup > 0}
                           onSelect={activate}
                         />

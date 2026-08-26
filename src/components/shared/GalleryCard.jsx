@@ -15,14 +15,16 @@ export default function GalleryCard({ gallery, onClick, variant = "default", act
     >
       <div className="relative h-44 overflow-hidden">
         <div className="grid grid-cols-2 grid-rows-2 gap-[1px] h-full bg-surface-600">
-          {gallery.coverImages.map((img, i) => (
-            <div key={i} className="overflow-hidden">
-              <img
-                src={img}
-                alt=""
-                className="w-full h-full object-cover img-cinematic transition-transform duration-500 ease-out group-hover:scale-110"
-                loading="lazy"
-              />
+          {(gallery.coverImages || []).slice(0, 4).map((img, i) => (
+            <div key={i} className="overflow-hidden bg-white/[0.03]">
+              {img ? (
+                <img
+                  src={img}
+                  alt=""
+                  className="w-full h-full object-cover img-cinematic transition-transform duration-500 ease-out group-hover:scale-110"
+                  loading="lazy"
+                />
+              ) : null}
             </div>
           ))}
         </div>
@@ -56,13 +58,17 @@ export default function GalleryCard({ gallery, onClick, variant = "default", act
 
         <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
           <div className="flex items-center gap-2">
-            <img
-              src={gallery.createdBy.avatar}
-              alt=""
-              className="w-5 h-5 rounded-full object-cover ring-1 ring-white/[0.06]"
-            />
+            {gallery.createdBy?.avatar ? (
+              <img
+                src={gallery.createdBy.avatar}
+                alt=""
+                className="w-5 h-5 rounded-full object-cover ring-1 ring-white/[0.06]"
+              />
+            ) : (
+              <span className="w-5 h-5 rounded-full bg-white/[0.08]" />
+            )}
             <span className="text-[10px] text-white/35">
-              {gallery.createdBy.name}
+              {gallery.createdBy?.name || "Library"}
             </span>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-white/20">
@@ -87,15 +93,19 @@ function CompactGallery({ gallery, onClick }) {
     >
       <div className="relative h-24 overflow-hidden">
         <div className="grid grid-cols-2 gap-[1px] h-full bg-surface-600">
-          {gallery.coverImages.map((img, i) => (
-            <img
-              key={i}
-              src={img}
-              alt=""
-              className="w-full h-full object-cover img-cinematic transition-transform duration-500 ease-out group-hover:scale-110"
-              loading="lazy"
-            />
-          ))}
+          {(gallery.coverImages || []).slice(0, 2).map((img, i) =>
+            img ? (
+              <img
+                key={i}
+                src={img}
+                alt=""
+                className="w-full h-full object-cover img-cinematic transition-transform duration-500 ease-out group-hover:scale-110"
+                loading="lazy"
+              />
+            ) : (
+              <div key={i} className="bg-white/[0.03]" />
+            )
+          )}
         </div>
       </div>
       <div className="px-3 py-2.5">

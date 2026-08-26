@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   Columns3,
@@ -12,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import StaffPanel from "../components/shared/StaffPanel";
+import { useCommandCenter } from "../contexts/CommandCenterContext";
 import {
   AD_ANGLE_COLORS,
   AD_BOARD_COLUMNS,
@@ -24,13 +26,22 @@ import {
   AD_PRODUCT_COLORS,
   AD_STATUS_COLORS,
   adProductionSeed,
+  parseTaskDrag,
 } from "../data/adProduction";
-import { currentUser } from "../data/mockData";
+import { currentUser, findWorkspaceUser, revoProducts, teamMembers } from "../data/mockData";
 
 // v2: full column set (all visible by default) — invalidates saved v1 state
 // where half the board was hidden.
-const COLUMN_STORAGE_KEY = "revo.commandCenter.boardColumns.v2";
+const COLUMN_STORAGE_KEY = "revo.commandCenter.boardColumns.v4";
 const OPEN_GROUP_STORAGE_KEY = "revo.commandCenter.lastOpenGroup.v1";
+const FOOTER_METRIC_KEY = "revo.commandCenter.footerMetric.v1";
+
+const FOOTER_METRICS = [
+  { id: "mix", label: "Mix", hint: "Color bar by tag" },
+  { id: "percent", label: "Percentage", hint: "Share of each tag" },
+  { id: "count", label: "Total", hint: "Count of each tag" },
+  { id: "complete", label: "Complete", hint: "Done or filled rate" },
+];
 
 /**
  * Groups default to collapsed; only the section the user last expanded
@@ -64,14 +75,20 @@ const ROLLUP_GETTERS = {
   performance: (i) => [i.performance],
 };
 
+const USER_ROLLUP_COLORS = Object.fromEntries(
+  teamMembers.filter((m) => m.color).map((m) => [m.name, m.color]),
+);
+
 const ROLLUP_COLORS = {
   status: AD_STATUS_COLORS,
   product: AD_PRODUCT_COLORS,
   priority: AD_PRIORITY_COLORS,
+  editor: USER_ROLLUP_COLORS,
   angle: AD_ANGLE_COLORS,
   style: AD_EDITING_STYLE_COLORS,
   platform: AD_PLATFORM_COLORS,
   painPoint: AD_PAIN_POINT_COLORS,
+  strategist: USER_ROLLUP_COLORS,
   performance: AD_PERFORMANCE_COLORS,
 };
 const DEFAULT_ORDER = AD_BOARD_COLUMNS.map((col) => col.id);
@@ -117,11 +134,118 @@ const TAG_FIELDS = {
 };
 
 function cellTagColor(columnId, item) {
+  // Product and platform use custom cells (thumb / logos), not a fill block.
+  if (columnId === "product" || columnId === "platform") return null;
   const get = TAG_FIELDS[columnId];
   if (!get) return null;
   const [label, color] = get(item);
   if (!label) return null;
   return color || hashHueColor(label);
+}
+
+const BOARD_PRODUCT_ALIASES = {
+  wave: "wave",
+  sculptor: "sculptor",
+  "collagen jelly": "collagen-jelly",
+  "face genie only": "face-genie",
+  "face genie & collagen jelly": "face-genie",
+  "face genie": "face-genie",
+  "relief bundle": "cupper",
+  "cupper mixed": "cupper",
+  cupper: "cupper",
+  "cellulite kit": "sculptor",
+};
+
+function resolveBoardProduct(name) {
+  const key = String(name || "").trim().toLowerCase();
+  if (!key) return null;
+  const aliased = BOARD_PRODUCT_ALIASES[key];
+  if (aliased) return revoProducts.find((p) => p.id === aliased) || null;
+  return (
+    revoProducts.find((p) => p.name.toLowerCase() === key) ||
+    revoProducts.find((p) => key.includes(p.name.toLowerCase())) ||
+    null
+  );
+}
+
+function PlatformGlyph({ id, className = "h-4 w-4" }) {
+  if (id === "meta") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M16.98 3.2c-1.66 0-3.22.78-4.98 2.5C10.24 3.98 8.68 3.2 7.02 3.2 4.2 3.2 2 5.55 2 9.05c0 3.05 1.72 6.3 4.95 9.55C8.9 20.7 10.85 22 12 22s3.1-1.3 5.05-3.4C20.28 15.35 22 12.1 22 9.05c0-3.5-2.2-5.85-5.02-5.85ZM8.4 15.7c-1.85-2.05-3.3-4.55-3.3-6.55 0-1.7.95-2.85 2.15-2.85 1.15 0 2.25.9 3.3 2.25.35.45.7 1 .98 1.55-1.15 2.15-2.25 4.15-3.13 5.6Zm7.2 0c-.88-1.45-1.98-3.45-3.13-5.6.28-.55.63-1.1.98-1.55 1.05-1.35 2.15-2.25 3.3-2.25 1.2 0 2.15 1.15 2.15 2.85 0 2-1.45 4.5-3.3 6.55Z"
+        />
+      </svg>
+    );
+  }
+  if (id === "youtube") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path fill="currentColor" d="M9 7.2v9.6L18.2 12 9 7.2Z" />
+      </svg>
+    );
+  }
+  if (id === "google") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path
+          fill="#4285F4"
+          d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5c-.3 1.5-1.1 2.7-2.4 3.6v3h3.8c2.3-2.1 3.6-5.1 3.6-8.7Z"
+        />
+        <path
+          fill="#34A853"
+          d="M12 24c3.2 0 6-1.1 8-2.9l-3.8-3c-1.1.7-2.5 1.2-4.2 1.2-3.2 0-6-2.2-7-5.1H1.1v3.1C3.1 21.3 7.2 24 12 24Z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M5 13.2c-.2-.7-.4-1.4-.4-2.2s.1-1.5.4-2.2V5.7H1.1A11.96 11.96 0 0 0 0 11c0 1.9.5 3.8 1.1 5.3L5 13.2Z"
+        />
+        <path
+          fill="#EA4335"
+          d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4C18 1.1 15.2 0 12 0 7.2 0 3.1 2.7 1.1 6.7L5 9.8C6 6.9 8.8 4.8 12 4.8Z"
+        />
+      </svg>
+    );
+  }
+  if (id === "applovin") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M12 3.2 3.4 20.8h3.6l1.5-3.2h7l1.5 3.2h3.6L12 3.2Zm0 5.4 2.4 5.2H9.6L12 8.6Z"
+        />
+      </svg>
+    );
+  }
+  if (id === "vibe") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M4 6.5c1.6 2.4 3 4.9 4.2 7.5.8 1.8 1.5 3.6 2.1 5.5h3.4c.6-1.9 1.3-3.7 2.1-5.5 1.2-2.6 2.6-5.1 4.2-7.5h-3.6c-1.2 2-2.3 4.1-3.3 6.3h-.2C9.9 10.6 8.8 8.5 7.6 6.5H4Z"
+        />
+      </svg>
+    );
+  }
+  return (
+    <span className="text-[9px] font-bold uppercase tracking-wide">{id.slice(0, 2)}</span>
+  );
+}
+
+const PLATFORM_MARKS = {
+  Meta: { id: "meta", bg: "#0668E1", fg: "#fff" },
+  YouTube: { id: "youtube", bg: "#FF0000", fg: "#fff" },
+  Google: { id: "google", bg: "#fff", fg: "#4285F4" },
+  AppLovin: { id: "applovin", bg: "#0B1220", fg: "#5CE1E6" },
+  Vibe: { id: "vibe", bg: "#6D28D9", fg: "#fff" },
+};
+
+function parsePlatforms(value) {
+  return String(value || "")
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function clampColWidth(col, next) {
@@ -165,29 +289,49 @@ function columnSegments(rows, columnId) {
   }));
 }
 
-function ColumnRollupBar({ segments }) {
-  if (segments == null) return <div className="h-2 mt-1.5" />;
+function ColumnRollupBar({ segments, compact = false, valueMode = null }) {
+  if (segments == null) return compact ? null : <div className="h-2 mt-1.5" />;
   const total = segments.reduce((sum, s) => sum + s.count, 0);
+  const showValues = valueMode === "percent" || valueMode === "count";
   if (total === 0) {
-    return <div className="h-2 mt-1.5 rounded-sm bg-white/[0.08]" />;
+    return (
+      <div
+        className={`${showValues ? "h-5" : "h-2"} rounded-sm bg-white/[0.08] ${compact ? "" : "mt-1.5"}`}
+      />
+    );
   }
-  const tip = segments.map((s) => `${s.label} (${s.count})`).join(" · ");
+  const tip = segments
+    .map((s) => `${s.label} · ${s.count} (${Math.round((s.count / total) * 100)}%)`)
+    .join("  ·  ");
   return (
     <div
-      className="h-2 mt-1.5 rounded-sm overflow-hidden flex w-full gap-px bg-black/40"
+      className={`${showValues ? "h-5" : "h-2"} rounded-sm overflow-hidden flex w-full gap-px bg-black/40 ${
+        compact ? "" : "mt-1.5"
+      }`}
       title={tip}
     >
-      {segments.map((s) => (
-        <span
-          key={s.label}
-          className="block h-full"
-          style={{
-            flex: `${s.count} 0 0`,
-            minWidth: 2,
-            backgroundColor: s.color,
-          }}
-        />
-      ))}
+      {segments.map((s) => {
+        const value =
+          valueMode === "percent"
+            ? `${Math.round((s.count / total) * 100)}%`
+            : valueMode === "count"
+              ? String(s.count)
+              : null;
+        return (
+          <span
+            key={s.label}
+            className="flex h-full min-w-[2px] items-center justify-center overflow-hidden text-[8px] font-bold tabular-nums leading-none"
+            style={{
+              flex: `${s.count} 0 0`,
+              backgroundColor: s.color,
+              color: value ? contrastText(s.color) : undefined,
+            }}
+            title={`${s.label}: ${s.count} (${Math.round((s.count / total) * 100)}%)`}
+          >
+            {value}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -206,6 +350,15 @@ function ColumnResizeHandle({ onResizeStart }) {
       <span className="absolute inset-y-1 right-[3px] w-px rounded-full bg-white/0 group-hover/th:bg-white/25 group-hover/resize:bg-white/70 group-active/resize:bg-white" />
     </span>
   );
+}
+
+function initials(name) {
+  return (name || "?")
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function firstName(name) {
@@ -231,6 +384,289 @@ function isOverdue(item) {
   if (!item.dueDate || CLOSED_STATUSES.has(item.status)) return false;
   const due = new Date(`${item.dueDate}T23:59:59`);
   return !Number.isNaN(due.getTime()) && due < new Date();
+}
+
+function columnKind(columnId) {
+  if (columnId === "item") return "item";
+  if (columnId === "due" || columnId === "sendDate") return "date";
+  if (columnId === "summary" || columnId === "adCopy") return "text";
+  if (ROLLUP_GETTERS[columnId]) return "tag";
+  return "text";
+}
+
+function rowHasValue(row, columnId) {
+  switch (columnId) {
+    case "item":
+      return true;
+    case "editor":
+      return (row.editors || []).length > 0;
+    case "strategist":
+      return (row.creativeStrategists || []).length > 0;
+    case "due":
+      return Boolean(row.dueDate);
+    case "sendDate":
+      return Boolean(row.sendDate);
+    case "style":
+      return Boolean(row.editingStyle);
+    case "summary":
+      return Boolean(row.summary);
+    case "adCopy":
+      return Boolean(row.adCopy);
+    default:
+      return Boolean(row[columnId]);
+  }
+}
+
+function rowIsComplete(row, columnId) {
+  if (columnId === "status") return CLOSED_STATUSES.has(row.status);
+  if (columnId === "due") {
+    if (CLOSED_STATUSES.has(row.status)) return true;
+    if (!row.dueDate) return false;
+    return !isOverdue(row);
+  }
+  return rowHasValue(row, columnId);
+}
+
+function dateExtent(rows, field) {
+  const dates = rows.map((r) => r[field]).filter(Boolean).sort();
+  if (!dates.length) return null;
+  return { min: dates[0], max: dates[dates.length - 1] };
+}
+
+function loadFooterMetric() {
+  try {
+    const v = localStorage.getItem(FOOTER_METRIC_KEY);
+    if (FOOTER_METRICS.some((m) => m.id === v)) return v;
+  } catch {
+    /* ignore private mode */
+  }
+  return "mix";
+}
+
+function CompleteMeter({ pct, color, title }) {
+  return (
+    <div className="flex items-center gap-1.5 min-w-0" title={title}>
+      <div className="flex-1 h-1.5 rounded-sm bg-black/40 overflow-hidden min-w-0">
+        <div
+          className="h-full rounded-sm"
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color || "#00c875" }}
+        />
+      </div>
+      <span className="shrink-0 text-[10px] font-mono tabular-nums text-white/70">{pct}%</span>
+    </div>
+  );
+}
+
+function FillBar({ filled, total, color }) {
+  const empty = Math.max(0, total - filled);
+  return (
+    <ColumnRollupBar
+      compact
+      segments={[
+        { label: "Set", count: filled, color: color || "#579bfc" },
+        { label: "Empty", count: empty, color: "rgba(255,255,255,0.14)" },
+      ].filter((s) => s.count > 0)}
+    />
+  );
+}
+
+function FooterMetricCell({ columnId, rows, metric, color }) {
+  const kind = columnKind(columnId);
+  const total = rows.length;
+  if (total === 0) return <span className="block h-2" />;
+
+  if (kind === "tag") {
+    const segments = columnSegments(rows, columnId);
+    if (metric === "complete") {
+      const done = rows.filter((r) => rowIsComplete(r, columnId)).length;
+      const pct = Math.round((done / total) * 100);
+      return (
+        <CompleteMeter
+          pct={pct}
+          color={columnId === "status" ? "#00c875" : color}
+          title={`${done} of ${total} complete`}
+        />
+      );
+    }
+    if (metric === "percent") {
+      return <ColumnRollupBar compact segments={segments} valueMode="percent" />;
+    }
+    if (metric === "count") {
+      return <ColumnRollupBar compact segments={segments} valueMode="count" />;
+    }
+    return <ColumnRollupBar compact segments={segments} />;
+  }
+
+  const filled = rows.filter((r) => rowHasValue(r, columnId)).length;
+  const fillPct = Math.round((filled / total) * 100);
+
+  if (kind === "date") {
+    if (metric === "complete") {
+      const done = rows.filter((r) => rowIsComplete(r, columnId)).length;
+      const pct = Math.round((done / total) * 100);
+      return (
+        <CompleteMeter
+          pct={pct}
+          color="#00c875"
+          title={
+            columnId === "due"
+              ? `${done} of ${total} on track`
+              : `${done} of ${total} dated`
+          }
+        />
+      );
+    }
+    if (metric === "count") {
+      const field = columnId === "due" ? "dueDate" : "sendDate";
+      const extent = dateExtent(rows, field);
+      if (!extent) {
+        return (
+          <span className="block text-[10px] font-mono tabular-nums text-white/35">
+            0/{total}
+          </span>
+        );
+      }
+      const range = `${formatDate(extent.min)} – ${formatDate(extent.max)}`;
+      return (
+        <span
+          className="block truncate text-[10px] font-mono text-white/55"
+          title={`${filled} dated · ${range}`}
+        >
+          {range}
+        </span>
+      );
+    }
+    if (metric === "percent") {
+      return (
+        <CompleteMeter
+          pct={fillPct}
+          color={color}
+          title={`${filled} of ${total} dated`}
+        />
+      );
+    }
+    return <FillBar filled={filled} total={total} color={color} />;
+  }
+
+  if (metric === "count") {
+    return (
+      <span className="block text-[10px] font-mono tabular-nums text-white/55">
+        {filled}/{total}
+      </span>
+    );
+  }
+  if (metric === "percent" || metric === "complete") {
+    return (
+      <CompleteMeter
+        pct={fillPct}
+        color={metric === "complete" ? "#00c875" : color}
+        title={`${filled} of ${total} filled`}
+      />
+    );
+  }
+  return <FillBar filled={filled} total={total} color={color} />;
+}
+
+function FooterMetricSelector({ value, onChange, rowCount }) {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const ref = useRef(null);
+  const menuRef = useRef(null);
+  const current = FOOTER_METRICS.find((m) => m.id === value) || FOOTER_METRICS[0];
+
+  useLayoutEffect(() => {
+    if (!open || !ref.current) {
+      setMenuPos(null);
+      return;
+    }
+    const place = () => {
+      const r = ref.current.getBoundingClientRect();
+      setMenuPos({
+        left: Math.max(8, r.left),
+        bottom: window.innerHeight - r.top + 6,
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e) => {
+      const t = e.target;
+      if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={ref}
+      className="relative flex items-center gap-1.5 min-w-0"
+      data-command-interactive
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 min-w-0 rounded-md border border-white/20 bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/85 hover:text-white hover:bg-white/[0.12]"
+      >
+        <span className="truncate">{current.label}</span>
+        <ChevronDown
+          size={10}
+          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      <span className="shrink-0 text-[10px] font-mono tabular-nums text-white/35">
+        {rowCount}
+      </span>
+      {open &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            data-command-interactive
+            className="fixed z-[80] w-[196px] glass-panel rounded-xl border border-white/[0.12] shadow-2xl shadow-black/60 py-1 fade-in"
+            style={{ left: menuPos.left, bottom: menuPos.bottom }}
+          >
+            {FOOTER_METRICS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onChange(m.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full flex-col items-start px-3 py-1.5 text-left ${
+                  m.id === value
+                    ? "bg-white/[0.08] text-white"
+                    : "text-white/70 hover:bg-white/[0.05] hover:text-white"
+                }`}
+              >
+                <span className="text-[12px] font-medium">{m.label}</span>
+                <span className="text-[10px] text-white/35">{m.hint}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }
 
 function loadColumnState() {
@@ -273,8 +709,20 @@ const FACET_DEFS = [
   { id: "status", label: "Status", values: (i) => [i.status], colors: AD_STATUS_COLORS },
   { id: "product", label: "Product", values: (i) => [i.product], colors: AD_PRODUCT_COLORS },
   { id: "priority", label: "Priority", values: (i) => [i.priority], colors: AD_PRIORITY_COLORS },
-  { id: "editor", label: "Editor", values: (i) => i.editors || [] },
-  { id: "strategist", label: "Strategist", values: (i) => i.creativeStrategists || [] },
+  {
+    id: "editor",
+    label: "Editor",
+    values: (i) => i.editors || [],
+    people: true,
+    format: (v) => findWorkspaceUser(v)?.name || v,
+  },
+  {
+    id: "strategist",
+    label: "Strategist",
+    values: (i) => i.creativeStrategists || [],
+    people: true,
+    format: (v) => findWorkspaceUser(v)?.name || v,
+  },
   { id: "angle", label: "Angle", values: (i) => [i.angle], colors: AD_ANGLE_COLORS },
   { id: "style", label: "Style", values: (i) => [i.editingStyle], colors: AD_EDITING_STYLE_COLORS },
   { id: "platform", label: "Platform", values: (i) => [i.platform], colors: AD_PLATFORM_COLORS },
@@ -322,9 +770,86 @@ function Badge({ label, color }) {
   if (!label) return <span className="text-white/25">—</span>;
   return (
     <span
-      className="block truncate text-[13px] font-semibold leading-none tracking-tight"
+      className="block w-full truncate text-center text-[13px] font-semibold leading-none tracking-tight"
       style={{ color: color ? contrastText(color) : undefined }}
       title={label}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ProductCell({ name }) {
+  if (!name) return <span className="text-white/20">—</span>;
+  const product = resolveBoardProduct(name);
+  const swatch = AD_PRODUCT_COLORS[name];
+  return (
+    <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden" title={name}>
+      {product?.thumbnail ? (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-white/15">
+          <img
+            src={product.thumbnail}
+            alt=""
+            className="h-[86%] w-[86%] object-contain"
+          />
+        </span>
+      ) : (
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[9px] font-bold ring-1 ring-white/10"
+          style={{
+            backgroundColor: swatch || "#4b5563",
+            color: contrastText(swatch || "#4b5563"),
+          }}
+        >
+          {initials(name)}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-none text-white">
+        {name}
+      </span>
+    </div>
+  );
+}
+
+function PlatformCell({ value }) {
+  const names = parsePlatforms(value);
+  if (names.length === 0) return <span className="text-white/20">—</span>;
+  return (
+    <div className="flex items-center justify-center gap-1" title={names.join(" / ")}>
+      {names.map((name) => {
+        const mark = PLATFORM_MARKS[name];
+        if (!mark) {
+          return (
+            <span
+              key={name}
+              className="flex h-7 min-w-7 items-center justify-center rounded-md bg-white/10 px-1 text-[9px] font-bold text-white/80"
+            >
+              {name.slice(0, 2).toUpperCase()}
+            </span>
+          );
+        }
+        return (
+          <span
+            key={name}
+            className="flex h-7 w-7 items-center justify-center rounded-md shadow-sm ring-1 ring-white/15"
+            style={{ backgroundColor: mark.bg, color: mark.fg }}
+            title={name}
+          >
+            <PlatformGlyph id={mark.id} className="h-[16px] w-[16px]" />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function DateCell({ iso }) {
+  const label = formatDate(iso);
+  if (!label) return <span className="block text-center text-white/20">—</span>;
+  return (
+    <span
+      className="block truncate text-center font-mono text-[12px] leading-none text-white"
+      title={iso}
     >
       {label}
     </span>
@@ -344,14 +869,42 @@ function CellText({ value, mono = false, muted = false }) {
 }
 
 function PersonCell({ names }) {
-  const list = (names || []).filter(Boolean);
-  if (list.length === 0) return <span className="text-white/20">Unassigned</span>;
-  const [primary, ...rest] = list;
+  const people = (names || [])
+    .filter(Boolean)
+    .map((name) => findWorkspaceUser(name) || { name });
+  if (people.length === 0) return <span className="text-white/20">—</span>;
+  const shown = people.slice(0, 3);
+  const extra = people.length - shown.length;
+  const title = people
+    .map((p) => (p.role ? `${p.name} · ${p.role}` : p.name))
+    .join(", ");
   return (
-    <span className="block truncate leading-none text-white/80" title={list.join(", ")}>
-      {primary}
-      {rest.length > 0 ? ` +${rest.length}` : ""}
-    </span>
+    <div className="flex items-center justify-center min-w-0" title={title}>
+      <div className="flex -space-x-1.5">
+        {shown.map((person) =>
+          person.avatar ? (
+            <img
+              key={person.id || person.name}
+              src={person.avatar}
+              alt={person.name}
+              className="h-7 w-7 rounded-full object-cover ring-2 ring-[#0c0e12]"
+            />
+          ) : (
+            <span
+              key={person.name}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-[9px] font-bold text-white/80 ring-2 ring-[#0c0e12]"
+            >
+              {initials(person.name)}
+            </span>
+          ),
+        )}
+        {extra > 0 && (
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-[9px] font-bold text-white/70 ring-2 ring-[#0c0e12]">
+            +{extra}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -380,44 +933,38 @@ function renderCell(columnId, item) {
   switch (columnId) {
     case "item":
       return (
-        <span className="block truncate text-[13px] font-semibold leading-none text-white" title={item.name}>
-          {item.name}
-        </span>
+        <div className="flex items-center justify-start min-w-0 gap-1.5 text-left">
+          <GripVertical
+            size={12}
+            className="shrink-0 text-white/0 group-hover/row:text-white/40"
+          />
+          <span className="truncate text-left text-[13px] font-semibold leading-none text-white" title={item.name}>
+            {item.name}
+          </span>
+        </div>
       );
     case "status":
       return <Badge label={item.status} color={AD_STATUS_COLORS[item.status]} />;
     case "product":
-      return <Badge label={item.product} color={AD_PRODUCT_COLORS[item.product]} />;
+      return <ProductCell name={item.product} />;
     case "priority":
       return <Badge label={item.priority} color={AD_PRIORITY_COLORS[item.priority]} />;
     case "editor":
       return <PersonCell names={item.editors} />;
     case "angle":
       return <Badge label={item.angle} color={AD_ANGLE_COLORS[item.angle]} />;
-    case "due": {
-      const label = formatDate(item.dueDate);
-      if (!label) return <span className="text-white/20">—</span>;
-      return (
-        <span
-          className={`block truncate font-mono text-[11px] leading-none ${
-            isOverdue(item) ? "text-accent-red" : "text-white/45"
-          }`}
-          title={item.dueDate}
-        >
-          {label}
-        </span>
-      );
-    }
+    case "due":
+      return <DateCell iso={item.dueDate} />;
     case "style":
       return <Badge label={item.editingStyle} color={AD_EDITING_STYLE_COLORS[item.editingStyle]} />;
     case "platform":
-      return <Badge label={item.platform} color={AD_PLATFORM_COLORS[item.platform]} />;
+      return <PlatformCell value={item.platform} />;
     case "painPoint":
       return <Badge label={item.painPoint} color={AD_PAIN_POINT_COLORS[item.painPoint]} />;
     case "strategist":
       return <PersonCell names={item.creativeStrategists} />;
     case "sendDate":
-      return <CellText value={formatDate(item.sendDate)} mono />;
+      return <DateCell iso={item.sendDate} />;
     case "performance":
       return <Badge label={item.performance} color={AD_PERFORMANCE_COLORS[item.performance]} />;
     case "summary":
@@ -558,6 +1105,7 @@ function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear
               const checked = selected.includes(value);
               const color = def.colors?.[value];
               const label = def.format ? def.format(value) : value;
+              const person = def.people ? findWorkspaceUser(value) : null;
               return (
                 <li key={value}>
                   <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-white/70 hover:bg-white/[0.05] cursor-pointer">
@@ -567,13 +1115,19 @@ function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear
                       onChange={() => onToggleValue(value)}
                       className="rounded border-white/20 bg-white/10"
                     />
-                    {color && (
+                    {person?.avatar ? (
+                      <img
+                        src={person.avatar}
+                        alt=""
+                        className="h-4 w-4 rounded-full object-cover shrink-0"
+                      />
+                    ) : color ? (
                       <span
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: color }}
                       />
-                    )}
-                    <span className="truncate flex-1" title={String(label)}>
+                    ) : null}
+                    <span className="truncate flex-1" title={person?.role || String(label)}>
                       {label}
                     </span>
                     <span className="text-[10px] font-mono text-white/25">
@@ -591,16 +1145,22 @@ function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear
 }
 
 export default function CommandCenter() {
+  const { selectedTaskId, openTask, closeTask, boardItems, moveTask } = useCommandCenter();
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState(loadInitialOpenGroups);
   const [{ order, hidden, widths }, setColumnState] = useState(loadColumnState);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dragId, setDragId] = useState(null);
   const [dropId, setDropId] = useState(null);
+  const [taskDragId, setTaskDragId] = useState(null);
+  const [taskDrop, setTaskDrop] = useState(null);
   const resizeRef = useRef(null);
+  const skipRowClickRef = useRef(false);
+  const taskDragIdRef = useRef(null);
   const [facets, setFacets] = useState({});
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [openFacet, setOpenFacet] = useState(null);
+  const [footerMetric, setFooterMetric] = useState(loadFooterMetric);
   const pickerRef = useRef(null);
   const filterRailRef = useRef(null);
 
@@ -611,6 +1171,14 @@ export default function CommandCenter() {
       /* ignore quota / private mode */
     }
   }, [order, hidden, widths]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FOOTER_METRIC_KEY, footerMetric);
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [footerMetric]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -648,12 +1216,28 @@ export default function CommandCenter() {
     };
   }, [openFacet]);
 
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    const item = boardItems.find((row) => row.id === selectedTaskId);
+    if (!item) return;
+    setOpenGroups((prev) => {
+      if (prev[item.phase]) return prev;
+      return { ...prev, [item.phase]: true };
+    });
+    const t = window.setTimeout(() => {
+      document
+        .querySelector(`[data-task-row="${selectedTaskId}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [selectedTaskId]);
+
   const hasActiveFilters =
     overdueOnly || Object.values(facets).some((values) => values?.length > 0);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return adProductionSeed.filter((item) => {
+    return boardItems.filter((item) => {
       if (
         q &&
         ![
@@ -682,7 +1266,7 @@ export default function CommandCenter() {
       }
       return true;
     });
-  }, [query, facets, overdueOnly]);
+  }, [boardItems, query, facets, overdueOnly]);
 
   const grouped = useMemo(
     () =>
@@ -761,6 +1345,21 @@ export default function CommandCenter() {
     setOrder(moveColumn(order, fromId, toId));
   };
 
+  const dropTaskOnGroup = (groupId, beforeId, explicitId) => {
+    const id = explicitId || taskDragIdRef.current || taskDragId;
+    if (!id) return;
+    moveTask(id, groupId, beforeId);
+    setOpenGroups((prev) => (prev[groupId] ? prev : { ...prev, [groupId]: true }));
+  };
+
+  const clearTaskDrag = () => {
+    taskDragIdRef.current = null;
+    setTaskDragId(null);
+    setTaskDrop(null);
+  };
+
+  const draggingTask = () => taskDragIdRef.current || taskDragId;
+
   const toggleGroup = (groupId, willOpen) => {
     setOpenGroups((prev) => ({ ...prev, [groupId]: willOpen }));
     if (willOpen) {
@@ -773,12 +1372,12 @@ export default function CommandCenter() {
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="h-full px-6 pb-16 pt-16 fade-in flex flex-col min-h-0">
-        <div className="flex-1 min-h-0 flex gap-3 lg:overflow-x-auto lg:overflow-y-hidden">
-          <StaffPanel className="hidden lg:flex w-[320px] xl:w-[345px] flex-shrink-0" />
+    <div className="h-full flex flex-col min-h-0 min-w-0 overflow-hidden">
+      <div className="h-full px-6 pb-16 pt-16 fade-in flex flex-col min-h-0 min-w-0 overflow-hidden">
+        <div className="flex-1 min-h-0 min-w-0 flex gap-3 overflow-hidden">
+          <StaffPanel className="hidden lg:flex flex-shrink-0" />
 
-          <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
             <div
               className="flex items-center justify-between gap-3 h-[52px] px-3 mb-2.5 flex-shrink-0 rounded-xl border border-white/10"
               style={{ background: "#191e29" }}
@@ -805,7 +1404,7 @@ export default function CommandCenter() {
             <div
               ref={filterRailRef}
               data-command-interactive
-              className="flex items-center mb-2.5 flex-shrink-0 border-y border-white/10"
+              className="flex items-center mb-2.5 flex-shrink-0 min-w-0 overflow-x-auto border-y border-white/10"
             >
               <span className="inline-flex items-center gap-1 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/35 border-r border-white/10 flex-shrink-0">
                 <SlidersHorizontal size={11} />
@@ -895,7 +1494,7 @@ export default function CommandCenter() {
             </div>
 
             <div
-              className="flex-1 min-h-0 overflow-auto overscroll-contain space-y-2 pr-1 flex flex-col"
+              className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain space-y-2 pr-1 flex flex-col"
               data-command-canvas-scroll
             >
           {grouped.map((group) => {
@@ -915,12 +1514,48 @@ export default function CommandCenter() {
                 key={group.id}
                 className={`rounded-2xl overflow-hidden border backdrop-blur-xl flex-shrink-0 ${
                   open ? "flex flex-col" : ""
+                } ${
+                  taskDragId && taskDrop?.groupId === group.id
+                    ? "ring-2 ring-white/40"
+                    : ""
                 }`}
                 style={{
                   minWidth: tableMinWidth,
                   backgroundColor: bodyBg,
                   borderColor: withAlpha(color, 0.28),
                   boxShadow: `inset 3px 0 0 ${color}`,
+                }}
+                onDragOver={(e) => {
+                  if (!draggingTask() || dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setTaskDrop((prev) =>
+                    prev?.groupId === group.id ? prev : { groupId: group.id },
+                  );
+                  if (!open) toggleGroup(group.id, true);
+                }}
+                onDrop={(e) => {
+                  if (dragId) return;
+                  e.preventDefault();
+                  const id =
+                    parseTaskDrag(e.dataTransfer.getData("text/plain")) ||
+                    draggingTask();
+                  if (id) {
+                    const before =
+                      taskDrop?.groupId === group.id
+                        ? taskDrop.atEnd
+                          ? null
+                          : taskDrop.beforeId
+                        : undefined;
+                    moveTask(id, group.id, before);
+                    if (!open) toggleGroup(group.id, true);
+                  }
+                  clearTaskDrag();
+                }}
+                onDragLeave={(e) => {
+                  const next = e.relatedTarget;
+                  if (next instanceof Node && e.currentTarget.contains(next)) return;
+                  setTaskDrop((prev) => (prev?.groupId === group.id ? null : prev));
                 }}
               >
                 <div className={open ? "overflow-y-auto max-h-[60vh]" : ""}>
@@ -951,7 +1586,7 @@ export default function CommandCenter() {
                                 data-command-interactive={!pinned ? "" : undefined}
                                 title={pinned ? undefined : "Drag name to reorder, edge to resize"}
                                 onDragStart={(e) => {
-                                  if (pinned || resizeRef.current) {
+                                  if (pinned || resizeRef.current || draggingTask()) {
                                     e.preventDefault();
                                     return;
                                   }
@@ -960,14 +1595,29 @@ export default function CommandCenter() {
                                   e.dataTransfer.effectAllowed = "move";
                                 }}
                                 onDragOver={(e) => {
+                                  if (draggingTask()) {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = "move";
+                                    setTaskDrop({ groupId: group.id });
+                                    return;
+                                  }
                                   if (pinned) return;
                                   e.preventDefault();
                                   if (dropId !== col.id) setDropId(col.id);
                                 }}
                                 onDrop={(e) => {
                                   e.preventDefault();
-                                  const from = e.dataTransfer.getData("text/plain") || dragId;
-                                  handleReorder(from, col.id);
+                                  const payload = e.dataTransfer.getData("text/plain");
+                                  const droppedTask =
+                                    parseTaskDrag(payload) || draggingTask();
+                                  if (droppedTask) {
+                                    dropTaskOnGroup(group.id, undefined, droppedTask);
+                                    clearTaskDrag();
+                                    setDragId(null);
+                                    setDropId(null);
+                                    return;
+                                  }
+                                  handleReorder(payload || dragId, col.id);
                                   setDragId(null);
                                   setDropId(null);
                                 }}
@@ -1049,9 +1699,11 @@ export default function CommandCenter() {
                                         </button>
                                       )}
                                     </div>
-                                    <ColumnRollupBar
-                                      segments={columnSegments(group.rows, col.id)}
-                                    />
+                                    {!open && (
+                                      <ColumnRollupBar
+                                        segments={columnSegments(group.rows, col.id)}
+                                      />
+                                    )}
                                   </>
                                 )}
                                 <ColumnResizeHandle onResizeStart={(e) => startResize(col, e)} />
@@ -1061,6 +1713,7 @@ export default function CommandCenter() {
                         </tr>
                       </thead>
                       {open && (
+                      <>
                       <tbody>
                         {group.rows.length === 0 ? (
                           <tr>
@@ -1072,47 +1725,165 @@ export default function CommandCenter() {
                             </td>
                           </tr>
                         ) : (
-                          group.rows.map((item, rowIdx) => (
-                            <tr key={item.id} className="group/row">
+                          group.rows.map((item, rowIdx) => {
+                            const selected = selectedTaskId === item.id;
+                            const dropBefore =
+                              taskDragId &&
+                              taskDragId !== item.id &&
+                              taskDrop?.groupId === group.id &&
+                              taskDrop.beforeId === item.id;
+                            return (
+                            <tr
+                              key={item.id}
+                              data-task-row={item.id}
+                              data-command-interactive
+                              draggable
+                              aria-selected={selected}
+                              onDragStart={(e) => {
+                                if (e.target.closest("a, button, input, [role='separator']")) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                skipRowClickRef.current = true;
+                                taskDragIdRef.current = item.id;
+                                setTaskDragId(item.id);
+                                e.dataTransfer.setData("text/plain", `task:${item.id}`);
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              onDragOver={(e) => {
+                                const dragging = draggingTask();
+                                if (!dragging || dragging === item.id || dragId) return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                e.dataTransfer.dropEffect = "move";
+                                setTaskDrop((prev) =>
+                                  prev?.groupId === group.id && prev.beforeId === item.id
+                                    ? prev
+                                    : { groupId: group.id, beforeId: item.id },
+                                );
+                              }}
+                              onDrop={(e) => {
+                                if (dragId) return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const id =
+                                  parseTaskDrag(e.dataTransfer.getData("text/plain")) ||
+                                  draggingTask();
+                                if (id && id !== item.id) {
+                                  moveTask(id, group.id, item.id);
+                                }
+                                clearTaskDrag();
+                              }}
+                              onDragEnd={() => {
+                                clearTaskDrag();
+                                window.setTimeout(() => {
+                                  skipRowClickRef.current = false;
+                                }, 0);
+                              }}
+                              onClick={(e) => {
+                                if (e.target.closest("a, button, input, [role='separator']")) return;
+                                if (skipRowClickRef.current) return;
+                                if (selected) closeTask();
+                                else openTask(item.id);
+                              }}
+                              className={`group/row cursor-grab active:cursor-grabbing ${
+                                selected ? "relative z-[1]" : ""
+                              } ${taskDragId === item.id ? "opacity-40" : ""}`}
+                              title="Drag to another section"
+                            >
                               {visibleColumns.map((col) => {
                                 const tagColor = cellTagColor(col.id, item);
+                                const centered =
+                                  Boolean(tagColor) ||
+                                  col.id === "due" ||
+                                  col.id === "sendDate" ||
+                                  col.id === "platform" ||
+                                  col.id === "editor" ||
+                                  col.id === "strategist";
                                 return (
                                 <td
                                   key={col.id}
-                                  className={`px-3 py-4 text-[13px] leading-none whitespace-nowrap align-middle ${
+                                  className={`relative px-2 py-2.5 text-[13px] leading-none whitespace-nowrap align-middle overflow-hidden ${
+                                    centered ? "text-center" : "text-left"
+                                  } ${
                                     col.pinned
                                       ? "sticky left-0 z-10"
-                                      : tagColor
-                                        ? ""
-                                        : rowIdx % 2
-                                          ? "bg-black/[0.14] group-hover/row:bg-white/[0.07]"
-                                          : "group-hover/row:bg-white/[0.05]"
+                                      : rowIdx % 2
+                                        ? "bg-black/[0.14] group-hover/row:bg-white/[0.07]"
+                                        : "group-hover/row:bg-white/[0.05]"
                                   }`}
                                   style={{
                                     backgroundColor: col.pinned
                                       ? mixOnDark(color, rowIdx % 2 ? 0.26 : 0.2)
-                                      : tagColor || undefined,
+                                      : undefined,
                                     width: col.width,
                                     minWidth: col.width,
                                     borderTop: `1px solid ${grid}`,
                                     borderRight: `1px solid ${grid}`,
+                                    boxShadow: dropBefore
+                                      ? "inset 0 2px 0 0 rgba(255,255,255,0.85)"
+                                      : selected
+                                        ? col.pinned
+                                          ? `inset 3px 0 0 ${color}, inset 0 0 0 1px rgba(255,255,255,0.35)`
+                                          : "inset 0 0 0 1px rgba(255,255,255,0.35)"
+                                        : undefined,
                                   }}
                                 >
-                                  {renderCell(col.id, item)}
+                                  {tagColor ? (
+                                    <>
+                                      <div
+                                        aria-hidden="true"
+                                        className="pointer-events-none absolute inset-1 rounded-[3px]"
+                                        style={{ backgroundColor: tagColor }}
+                                      />
+                                      <div className="relative z-[1] flex min-h-[36px] items-center justify-center px-1">
+                                        {renderCell(col.id, item)}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    renderCell(col.id, item)
+                                  )}
                                 </td>
                                 );
                               })}
                             </tr>
-                          ))
+                            );
+                          })
                         )}
                         {/* Placeholder row — Monday-style "+ Add new" at the
                             bottom of every group. */}
-                        <tr>
+                        <tr
+                          onDragOver={(e) => {
+                            if (!draggingTask() || dragId) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.dataTransfer.dropEffect = "move";
+                            setTaskDrop((prev) =>
+                              prev?.groupId === group.id && prev.atEnd
+                                ? prev
+                                : { groupId: group.id, atEnd: true },
+                            );
+                          }}
+                          onDrop={(e) => {
+                            if (dragId) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const id =
+                              parseTaskDrag(e.dataTransfer.getData("text/plain")) ||
+                              draggingTask();
+                            if (id) moveTask(id, group.id, null);
+                            clearTaskDrag();
+                          }}
+                        >
                           <td
-                            className="sticky left-0 z-10 px-3 py-4 whitespace-nowrap"
+                            className="sticky left-0 z-10 px-2 py-3 whitespace-nowrap"
                             style={{
                               backgroundColor: mixOnDark(color, 0.2),
-                              borderTop: `1px solid ${grid}`,
+                              borderTop: `1px solid ${
+                                taskDragId && taskDrop?.groupId === group.id && taskDrop.atEnd
+                                  ? "rgba(255,255,255,0.85)"
+                                  : grid
+                              }`,
                               borderRight: `1px solid ${grid}`,
                             }}
                           >
@@ -1133,6 +1904,46 @@ export default function CommandCenter() {
                           )}
                         </tr>
                       </tbody>
+                      <tfoot>
+                        <tr>
+                          {visibleColumns.map((col) => {
+                            const pinned = Boolean(col.pinned);
+                            return (
+                              <td
+                                key={col.id}
+                                className={`sticky bottom-0 px-2 py-1.5 ${
+                                  pinned ? "left-0 z-30" : "z-20"
+                                }`}
+                                style={{
+                                  backgroundColor: pinned
+                                    ? mixOnDark(color, 0.22)
+                                    : headerBg,
+                                  width: col.width,
+                                  minWidth: col.width,
+                                  borderTop: `1px solid ${gridStrong}`,
+                                  borderRight: `1px solid ${grid}`,
+                                }}
+                              >
+                                {pinned ? (
+                                  <FooterMetricSelector
+                                    value={footerMetric}
+                                    onChange={setFooterMetric}
+                                    rowCount={group.rows.length}
+                                  />
+                                ) : (
+                                  <FooterMetricCell
+                                    columnId={col.id}
+                                    rows={group.rows}
+                                    metric={footerMetric}
+                                    color={color}
+                                  />
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tfoot>
+                      </>
                       )}
                     </table>
                   </div>

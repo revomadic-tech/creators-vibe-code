@@ -164,7 +164,7 @@ const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export default function CommandCenterNav({ progress = 0, settling = false }) {
   const navRef = useRef(null);
-  const { setOpen } = useCommandCenter();
+  const { setOpen, openTask } = useCommandCenter();
   const [panel, setPanel] = useState(null);
   const [clockedIn, setClockedIn] = useState(true);
   const [requests, setRequests] = useState(seedRequests);
@@ -246,10 +246,10 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
       }}
     >
       <div
-        className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl"
+        className="flex items-center justify-between gap-3 w-full min-w-0 px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl overflow-hidden"
         style={{ backgroundColor: "rgba(25, 30, 41, 0.42)" }}
       >
-        <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
+        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
         <button
           type="button"
           data-command-gesture-handle
@@ -555,9 +555,14 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {notifications.map((n) => (
-              <div
+              <button
+                type="button"
                 key={n.id}
-                className={`px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
+                onClick={() => {
+                  if (n.taskRef) openTask(n.taskRef);
+                  setPanel(null);
+                }}
+                className={`w-full text-left px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
                   !n.read ? "bg-white/[0.015]" : ""
                 }`}
               >
@@ -570,7 +575,7 @@ export default function CommandCenterNav({ progress = 0, settling = false }) {
                     <p className="text-[11px] text-white/25 mt-1">{n.time}</p>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

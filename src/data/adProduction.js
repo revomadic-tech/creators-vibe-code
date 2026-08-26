@@ -1,3 +1,5 @@
+import adProductionSeed from "./adProduction.seed.json";
+
 export const AD_PHASES = [
   { id: "topics", title: "Video Editing Phase", color: "#14b8a6" },
   { id: "group_mm015fvq", title: "Image Design Editing Phase", color: "#8b5cf6" },
@@ -14,21 +16,21 @@ export const AD_PHASES = [
 // Full column set — every field the local monday.com snapshot carries is a
 // real column, visible by default. Hide/reorder via the Columns picker.
 export const AD_BOARD_COLUMNS = [
-  { id: "item", label: "Item", width: 228, minWidth: 168, pinned: true, hideable: false },
-  { id: "status", label: "Status", width: 172, minWidth: 128 },
-  { id: "product", label: "Product", width: 156, minWidth: 112 },
-  { id: "priority", label: "Priority", width: 118, minWidth: 96 },
-  { id: "editor", label: "Editor", width: 124, minWidth: 96 },
-  { id: "angle", label: "Angle", width: 136, minWidth: 100 },
-  { id: "due", label: "Due", width: 92, minWidth: 76 },
-  { id: "style", label: "Style", width: 144, minWidth: 108 },
-  { id: "platform", label: "Platform", width: 116, minWidth: 96 },
-  { id: "painPoint", label: "Pain Point", width: 148, minWidth: 112 },
-  { id: "strategist", label: "Strategist", width: 124, minWidth: 96 },
-  { id: "sendDate", label: "Send Date", width: 100, minWidth: 84 },
-  { id: "performance", label: "Performance", width: 128, minWidth: 108 },
-  { id: "summary", label: "Summary", width: 112, minWidth: 88 },
-  { id: "adCopy", label: "Ad Copy", width: 280, minWidth: 140 },
+  { id: "item", label: "Item", width: 188, minWidth: 140, pinned: true, hideable: false },
+  { id: "status", label: "Status", width: 148, minWidth: 112 },
+  { id: "product", label: "Product", width: 168, minWidth: 128 },
+  { id: "priority", label: "Priority", width: 104, minWidth: 88 },
+  { id: "editor", label: "Editor", width: 72, minWidth: 56 },
+  { id: "angle", label: "Angle", width: 120, minWidth: 92 },
+  { id: "due", label: "Due", width: 80, minWidth: 68 },
+  { id: "style", label: "Style", width: 128, minWidth: 96 },
+  { id: "platform", label: "Platform", width: 100, minWidth: 84 },
+  { id: "painPoint", label: "Pain Point", width: 132, minWidth: 100 },
+  { id: "strategist", label: "Strategist", width: 72, minWidth: 56 },
+  { id: "sendDate", label: "Send Date", width: 88, minWidth: 76 },
+  { id: "performance", label: "Performance", width: 112, minWidth: 96 },
+  { id: "summary", label: "Summary", width: 96, minWidth: 80 },
+  { id: "adCopy", label: "Ad Copy", width: 240, minWidth: 128 },
 ];
 
 // Label→color maps mirrored from the live monday.com board's dropdowns.
@@ -200,4 +202,105 @@ export const AD_PERFORMANCE_COLORS = {
   Winner: "#037f4c",
 };
 
-export { default as adProductionSeed } from "./adProduction.seed.json";
+export { adProductionSeed };
+
+export const BOARD_LAYOUT_KEY = "revo.commandCenter.boardLayout.v1";
+
+const PHASE_IDS = new Set(AD_PHASES.map((p) => p.id));
+
+/** Resolve a board item by monday id, `#1683`, or `1683`. */
+export function findAdTask(ref, list = adProductionSeed) {
+  if (ref == null || ref === "") return null;
+  const raw = String(ref).trim();
+  const byId = list.find((item) => item.id === raw);
+  if (byId) return byId;
+  const name = raw.startsWith("#") ? raw : `#${raw.replace(/^#/, "")}`;
+  return list.find((item) => item.name === name) || null;
+}
+
+export function loadBoardItems() {
+  const seed = adProductionSeed.map((item) => ({ ...item }));
+  try {
+    const saved = JSON.parse(localStorage.getItem(BOARD_LAYOUT_KEY) || "null");
+    if (!saved || typeof saved !== "object") return seed;
+    const phases = saved.phases && typeof saved.phases === "object" ? saved.phases : {};
+    const byId = Object.fromEntries(
+      seed.map((item) => {
+        const phase = phases[item.id];
+        return [item.id, phase && PHASE_IDS.has(phase) ? { ...item, phase } : { ...item }];
+      }),
+    );
+    const next = [];
+    const seen = new Set();
+    for (const id of Array.isArray(saved.order) ? saved.order : []) {
+      if (byId[id] && !seen.has(id)) {
+        next.push(byId[id]);
+        seen.add(id);
+      }
+    }
+    for (const item of seed) {
+      if (!seen.has(item.id)) next.push(byId[item.id]);
+    }
+    return next;
+  } catch {
+    return seed;
+  }
+}
+
+export function persistBoardItems(items) {
+  try {
+    localStorage.setItem(
+      BOARD_LAYOUT_KEY,
+      JSON.stringify({
+        phases: Object.fromEntries(items.map((item) => [item.id, item.phase])),
+        order: items.map((item) => item.id),
+      }),
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function parseTaskDrag(data) {
+  const raw = String(data || "");
+  return raw.startsWith("task:") ? raw.slice(5) : null;
+}
+
+/** Move a task into a phase, optionally inserting before another item.
+ *  `beforeId` undefined = drop on section (no-op if already there, else append).
+ *  `beforeId` null = append to the section.
+ *  `beforeId` string = insert before that item.
+ */
+export function moveBoardTask(items, taskId, toPhase, beforeId) {
+  if (!PHASE_IDS.has(toPhase)) return items;
+  const from = items.find((item) => item.id === taskId);
+  if (!from) return items;
+
+  const samePhase = from.phase === toPhase;
+  if (samePhase && beforeId === undefined) return items;
+  if (samePhase && beforeId === taskId) return items;
+
+  if (samePhase && (beforeId === null || beforeId === undefined)) {
+    const group = items.filter((item) => item.phase === toPhase);
+    if (group[group.length - 1]?.id === taskId) return items;
+  }
+
+  const without = items.filter((item) => item.id !== taskId);
+  const moved = { ...from, phase: toPhase };
+  if (typeof beforeId === "string" && beforeId && beforeId !== taskId) {
+    const idx = without.findIndex((item) => item.id === beforeId);
+    if (idx >= 0) {
+      without.splice(idx, 0, moved);
+      return without;
+    }
+  }
+  let insertAt = without.length;
+  for (let i = without.length - 1; i >= 0; i -= 1) {
+    if (without[i].phase === toPhase) {
+      insertAt = i + 1;
+      break;
+    }
+  }
+  without.splice(insertAt, 0, moved);
+  return without;
+}

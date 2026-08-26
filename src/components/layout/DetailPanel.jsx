@@ -26,6 +26,7 @@ import {
 import { StatusBadge, PriorityBadge } from "../ui/Tag";
 import MetadataRow from "../ui/MetadataRow";
 import ProgressBar from "../ui/ProgressBar";
+import { adminDiscoveryUrl } from "../../config";
 
 export default function DetailPanel({
   item,
@@ -35,15 +36,13 @@ export default function DetailPanel({
   relatedAssets,
   onSelectRelated,
 }) {
-  if (!item) return null;
-
   const isAsset = type === "asset";
   const navigate = useNavigate();
   const [railOpen, setRailOpen] = useState(false);
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onClose?.();
     },
     [onClose]
   );
@@ -52,6 +51,8 @@ export default function DetailPanel({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  if (!item) return null;
 
   const goToBrief = (briefId) => {
     if (!briefId) return;
@@ -119,7 +120,22 @@ export default function DetailPanel({
               >
                 <Maximize2 size={13} />
               </button>
+              {isAsset && (
+                <a
+                  href={adminDiscoveryUrl(item.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
+                  title="Open in Admin"
+                >
+                  <ExternalLink size={13} />
+                </a>
+              )}
               <button
+                onClick={() => {
+                  const url = `${window.location.origin}/?assetId=${item.id}`;
+                  navigator.clipboard?.writeText(url);
+                }}
                 className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
                 title="Copy link"
               >
@@ -151,7 +167,7 @@ export default function DetailPanel({
                 onSelectRelated={onSelectRelated}
                 onGoBrief={goToBrief}
                 onGoProduct={(value) =>
-                  goToDiscoveryFiltered("product", value)
+                  goToDiscoveryFiltered("product", item.productId || value)
                 }
                 onGoPartner={(value) =>
                   goToDiscoveryFiltered("partner", value)
@@ -172,19 +188,40 @@ export default function DetailPanel({
 
           {/* Footer CTA */}
           <div className="px-4 py-3 border-t border-white/[0.06] flex-shrink-0 flex items-center gap-2">
-            <button
-              onClick={
-                onOpenFull ||
-                (isAsset ? undefined : () => goToBrief(item.id))
-              }
-              className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
-            >
-              <ExternalLink size={14} />
-              {isAsset ? "View Full Asset" : "Open Full Brief"}
-            </button>
-            <button className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200">
-              <Download size={15} />
-            </button>
+            {isAsset ? (
+              <a
+                href={adminDiscoveryUrl(item.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                <ExternalLink size={14} />
+                Open in Admin
+              </a>
+            ) : (
+              <button
+                onClick={onOpenFull || (() => goToBrief(item.id))}
+                className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                <ExternalLink size={14} />
+                Open Full Brief
+              </button>
+            )}
+            {isAsset && item.downloadUrl ? (
+              <a
+                href={item.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200"
+                title="Download"
+              >
+                <Download size={15} />
+              </a>
+            ) : (
+              <button className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200">
+                <Download size={15} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -413,14 +450,20 @@ function AssetDetail({
             icon={User}
             label="Editor"
             value={
-              <div className="flex items-center gap-1.5">
-                <img
-                  src={item.editorAvatar}
-                  alt=""
-                  className="w-4 h-4 rounded-full ring-1 ring-white/[0.06]"
-                />
-                <span className="font-medium">{item.editor}</span>
-              </div>
+              item.editor ? (
+                <div className="flex items-center gap-1.5">
+                  {item.editorAvatar ? (
+                    <img
+                      src={item.editorAvatar}
+                      alt=""
+                      className="w-4 h-4 rounded-full ring-1 ring-white/[0.06]"
+                    />
+                  ) : null}
+                  <span className="font-medium">{item.editor}</span>
+                </div>
+              ) : (
+                "—"
+              )
             }
           />
         </div>

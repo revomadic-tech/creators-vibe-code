@@ -27,22 +27,41 @@ import {
   BarChart3,
   Image,
   PanelLeftOpen,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import DetailPanel from "../components/layout/DetailPanel";
 import AssetCard from "../components/shared/AssetCard";
 import TeamShowcase from "../components/shared/TeamShowcase";
 import FolderTree from "../components/shared/FolderTree";
+import { teamMembers, briefs } from "../data/mockData";
 import {
-  assets,
-  products,
-  partners,
-  statuses,
-  assetTypes,
-  categories,
-  teamMembers,
-  revoProducts,
-  briefs,
-} from "../data/mockData";
+  useGetContentById,
+  useGetContentDiscoveryFeed,
+  useGetContentList,
+  useMergedContentList,
+} from "../api/content/hooks";
+import { useGetGalleries } from "../api/content-gallery/hooks";
+import {
+  mapContentAsset,
+  mapDiscoveryProduct,
+  unwrapDetail,
+  unwrapFeed,
+  unwrapGalleries,
+  unwrapList,
+} from "../lib/mapContentAsset";
+import {
+  EMPTY_FEED,
+  PAGE_SIZE,
+  SORT_TO_API,
+  apiTypesFromUi,
+  uiTypesFromCounts,
+} from "../lib/contentConstants";
+import {
+  familyIdsForProductFilter,
+  groupProductFamilies,
+} from "../lib/groupProductFamilies";
 
 const typeIcons = {
   Photo: Camera,
@@ -63,13 +82,8 @@ const sortOptions = [
 ];
 
 export default function Discovery() {
-  const [searchParams] = useSearchParams();
-  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [typeFilters, setTypeFilters] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [productFilter, setProductFilter] = useState("");
-  const [partnerFilter, setPartnerFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [layout, setLayout] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
@@ -78,115 +92,210 @@ export default function Discovery() {
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [folderMeta, setFolderMeta] = useState(null);
   const [folderHidden, setFolderHidden] = useState(true);
+  const [page, setPage] = useState(0);
 
-  useEffect(() => {
-    const product = searchParams.get("product");
-    const partner = searchParams.get("partner");
-    const status = searchParams.get("status");
-    const assetId = searchParams.get("assetId");
+  const assetIdParam = searchParams.get("assetId");
+  const productFilter = searchParams.get("product") || "";
+  const categoryFilter = searchParams.get("tag") || searchParams.get("category") || "";
 
-    if (product) {
-      setProductFilter(product);
-      setSelectedFolderId(`product:${product}`);
-    }
-    if (partner) {
-      setPartnerFilter(partner);
-      setSelectedFolderId(`partner:${partner}`);
-    }
-    if (status) setStatusFilter(status);
-    if (product || partner || status) setShowFilters(true);
+  const patchParams = useCallback(
+    (mutate) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        mutate(next);
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams]
+  );
 
-    if (assetId) {
-      const matched = assets.find((a) => a.id === Number(assetId));
-      if (matched) setSelectedAsset(matched);
-    }
-  }, [searchParams]);
+  const setProductFilter = useCallback(
+    (value) => {
+      setPage(0);
+      patchParams((next) => {
+        if (value) next.set("product", String(value));
+        else next.delete("product");
+      });
+    },
+    [patchParams]
+  );
 
-  const filteredAssets = useMemo(() => {
-    let result = [...assets].filter((a) => {
-      if (typeFilters.length && !typeFilters.includes(a.type)) return false;
-      if (statusFilter && a.status !== statusFilter) return false;
-      if (productFilter && a.product !== productFilter) return false;
-      if (partnerFilter && a.partner !== partnerFilter) return false;
-      if (categoryFilter && a.category !== categoryFilter) return false;
-      if (folderMeta?.briefTitle && a.briefTitle !== folderMeta.briefTitle)
-        return false;
-      if (folderMeta?.isNew && !a.isNew) return false;
-      if (folderMeta?.isFeatured && !a.isFeatured) return false;
-      return true;
-    });
-    switch (sortBy) {
-      case "oldest":
-        result.sort((a, b) => a.dateSubmitted.localeCompare(b.dateSubmitted));
-        break;
-      case "views":
-        result.sort((a, b) => b.views - a.views);
-        break;
-      case "downloads":
-        result.sort((a, b) => b.downloads - a.downloads);
-        break;
-      case "az":
-        result.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      default:
-        result.sort((a, b) => b.dateSubmitted.localeCompare(a.dateSubmitted));
-    }
-    return result;
-  }, [
-    typeFilters,
-    statusFilter,
-    productFilter,
-    partnerFilter,
-    categoryFilter,
-    folderMeta,
-    sortBy,
-  ]);
+  const setCategoryFilter = useCallback(
+    (value) => {
+      setPage(0);
+      patchParams((next) => {
+        if (value) next.set("tag", String(value));
+        else {
+          next.delete("tag");
+          next.delete("category");
+        }
+      });
+    },
+    [patchParams]
+  );
 
-  const newAssets = useMemo(() => assets.filter((a) => a.isNew), []);
+  const { data: feedResp, isLoading: feedLoading } =
+    useGetContentDiscoveryFeed();
+  const feed = unwrapFeed(feedResp) || EMPTY_FEED;
+  const discoveryProducts = useMemo(
+    () =>
+      groupProductFamilies(
+        (feed.products || []).map(mapDiscoveryProduct).filter(Boolean)
+      ),
+    [feed.products]
+  );
+  const { data: galleriesResp } = useGetGalleries();
+  const liveGalleries = unwrapGalleries(galleriesResp);
+  const featuredAssets = useMemo(
+    () => (feed.featured || []).map(mapContentAsset).filter(Boolean),
+    [feed.featured]
+  );
+  const newAssets = useMemo(
+    () => (feed.trending || []).map(mapContentAsset).filter(Boolean),
+    [feed.trending]
+  );
+  const typeOptions = uiTypesFromCounts(feed.typeCounts);
+
+  const folderIds = useMemo(() => {
+    if (folderMeta?.isNew) return newAssets.map((a) => a.id);
+    if (folderMeta?.isFeatured) return featuredAssets.map((a) => a.id);
+    return folderMeta?.ids || [];
+  }, [folderMeta, newAssets, featuredAssets]);
+
+  const queryProductIds = useMemo(
+    () => familyIdsForProductFilter(discoveryProducts, productFilter),
+    [discoveryProducts, productFilter]
+  );
+
+  const listPayload = useMemo(() => {
+    const payload = {
+      page: String(page + 1),
+      size: String(PAGE_SIZE),
+      sort: SORT_TO_API[sortBy] || "date",
+    };
+    const apiType = apiTypesFromUi(typeFilters);
+    if (apiType) payload.type = apiType;
+    if (categoryFilter) payload.tag = categoryFilter;
+    if (folderIds.length) payload.ids = folderIds.join(",");
+    return payload;
+  }, [page, sortBy, typeFilters, categoryFilter, folderIds]);
+
+  const {
+    items: filteredAssets,
+    count: totalCount,
+    pages: totalPagesRaw,
+    isLoading: listLoading,
+    isFetching: listFetching,
+  } = useMergedContentList(listPayload, queryProductIds);
+  const totalPages = totalPagesRaw || 1;
+
+  const deepLinkId = assetIdParam && !Number.isNaN(Number(assetIdParam))
+    ? Number(assetIdParam)
+    : null;
+  const { data: detailResp } = useGetContentById(deepLinkId);
+  const selectedAsset =
+    (deepLinkId && filteredAssets.find((a) => a.id === deepLinkId)) ||
+    (deepLinkId ? unwrapDetail(detailResp) : null);
+
+  const relatedPayload = useMemo(
+    () => ({
+      page: "1",
+      size: "5",
+      sort: "date",
+      ...(selectedAsset?.productId
+        ? { productId: String(selectedAsset.productId) }
+        : {}),
+    }),
+    [selectedAsset]
+  );
+  const { data: relatedResp } = useGetContentList(relatedPayload, {
+    enabled: Boolean(selectedAsset?.productId),
+  });
+
   const hasActiveFilters =
     typeFilters.length > 0 ||
-    statusFilter ||
     productFilter ||
-    partnerFilter ||
     categoryFilter ||
     folderMeta;
   const activeFilterCount = [
     typeFilters.length > 0,
-    statusFilter,
     productFilter,
-    partnerFilter,
     categoryFilter,
     folderMeta,
   ].filter(Boolean).length;
 
+  const productLabel = discoveryProducts.find(
+    (p) =>
+      String(p.id) === String(productFilter) ||
+      (p.variantIds || []).map(String).includes(String(productFilter))
+  )?.name || productFilter;
+
   const handleSelectFolder = useCallback((node) => {
     if (node.kind === "group") return;
+    setPage(0);
     setSelectedFolderId(node.id);
     setTypeFilters([]);
-    setProductFilter("");
-    setPartnerFilter("");
-    setCategoryFilter("");
     setFolderMeta(null);
-    if (node.kind === "all") return;
-    if (node.kind === "product") setProductFilter(node.value);
-    else if (node.kind === "partner") setPartnerFilter(node.value);
-    else if (node.kind === "category") setCategoryFilter(node.value);
-    else if (node.kind === "type") setTypeFilters([node.value]);
-    else if (node.kind === "campaign")
-      setFolderMeta({ briefTitle: node.value });
-    else if (node.kind === "new") setFolderMeta({ isNew: true });
-    else if (node.kind === "featured") setFolderMeta({ isFeatured: true });
-  }, []);
+    if (node.kind === "all") {
+      setProductFilter("");
+      setCategoryFilter("");
+      return;
+    }
+    if (node.kind === "product") {
+      setCategoryFilter("");
+      setProductFilter(String(node.value));
+    } else if (node.kind === "category") {
+      setProductFilter("");
+      setCategoryFilter(node.value);
+    } else if (node.kind === "type") {
+      setProductFilter("");
+      setCategoryFilter("");
+      setTypeFilters([node.value]);
+    } else if (node.kind === "new") {
+      setProductFilter("");
+      setCategoryFilter("");
+      setFolderMeta({ isNew: true });
+    } else if (node.kind === "featured") {
+      setProductFilter("");
+      setCategoryFilter("");
+      setFolderMeta({ isFeatured: true });
+    } else if (node.kind === "gallery") {
+      setProductFilter("");
+      setCategoryFilter("");
+      setFolderMeta({
+        galleryTitle: node.label,
+        ids: node.assetIds || [],
+      });
+    }
+  }, [setProductFilter, setCategoryFilter]);
 
   const clearAll = useCallback(() => {
+    setPage(0);
     setTypeFilters([]);
-    setStatusFilter("");
     setProductFilter("");
-    setPartnerFilter("");
     setCategoryFilter("");
     setFolderMeta(null);
     setSelectedFolderId("all");
-  }, []);
+  }, [setProductFilter, setCategoryFilter]);
+
+  const openAsset = useCallback(
+    (asset) => {
+      patchParams((next) => {
+        next.set("assetId", String(asset.id));
+      });
+    },
+    [patchParams]
+  );
+
+  const closeAsset = useCallback(() => {
+    patchParams((next) => {
+      next.delete("assetId");
+    });
+  }, [patchParams]);
+
+  const relatedAssets = unwrapList(relatedResp).items.filter(
+    (a) => a.id !== selectedAsset?.id
+  ).slice(0, 4);
 
   const currentSort = sortOptions.find((s) => s.value === sortBy);
 
@@ -196,21 +305,15 @@ export default function Discovery() {
         <ProductFullPage
           product={activeProduct}
           onBack={() => setActiveProduct(null)}
-          onAssetClick={setSelectedAsset}
+          onAssetClick={openAsset}
         />
         {selectedAsset && (
           <DetailPanel
             item={selectedAsset}
             type="asset"
-            onClose={() => setSelectedAsset(null)}
-            relatedAssets={assets
-              .filter(
-                (a) =>
-                  a.id !== selectedAsset.id &&
-                  a.product === selectedAsset.product
-              )
-              .slice(0, 4)}
-            onSelectRelated={setSelectedAsset}
+            onClose={closeAsset}
+            relatedAssets={relatedAssets}
+            onSelectRelated={openAsset}
           />
         )}
       </>
@@ -223,12 +326,13 @@ export default function Discovery() {
         <div className="fade-in pt-14 flex-1 flex overflow-hidden min-h-0">
           {!folderHidden && (
             <FolderTree
-              assets={assets}
-              products={products}
-              partners={partners}
-              categories={categories}
-              assetTypes={assetTypes}
-              briefs={briefs}
+              totalCount={feed.totalCount}
+              newCount={feed.newToday || newAssets.length}
+              featuredCount={featuredAssets.length}
+              products={discoveryProducts}
+              tags={feed.tags || []}
+              typeCounts={feed.typeCounts}
+              galleries={liveGalleries}
               typeIcons={typeIcons}
               selectedId={selectedFolderId}
               onSelect={handleSelectFolder}
@@ -262,7 +366,7 @@ export default function Discovery() {
                       <AssetCard
                         key={asset.id}
                         asset={asset}
-                        onClick={setSelectedAsset}
+                        onClick={openAsset}
                         variant="featured"
                       />
                     ))}
@@ -272,7 +376,10 @@ export default function Discovery() {
 
               {/* Product collections — above command bar */}
               <div className="mb-6">
-                <ProductCollectionSlider onSelectProduct={setActiveProduct} />
+                <ProductCollectionSlider
+                  products={discoveryProducts}
+                  onSelectProduct={setActiveProduct}
+                />
               </div>
             </div>
             )}
@@ -294,8 +401,9 @@ export default function Discovery() {
                 )}
                 <TypeMultiSelect
                   values={typeFilters}
-                  options={assetTypes}
+                  options={typeOptions}
                   onChange={(next) => {
+                    setPage(0);
                     setTypeFilters(next);
                     if (selectedFolderId.startsWith("type:"))
                       setSelectedFolderId("all");
@@ -339,6 +447,7 @@ export default function Discovery() {
                           <button
                             key={s.value}
                             onClick={() => {
+                              setPage(0);
                               setSortBy(s.value);
                               setShowSortMenu(false);
                             }}
@@ -384,33 +493,24 @@ export default function Discovery() {
               </div>
 
               {/* Advanced filters row */}
-              {showFilters && (
+              { (showFilters || productFilter || categoryFilter) && (
                 <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/[0.04] fade-in">
                   <span className="text-[10px] text-white/18 uppercase tracking-wider font-semibold mr-1">
                     Refine
                   </span>
                   <FilterChip
-                    label="Status"
-                    value={statusFilter}
-                    options={statuses}
-                    onChange={setStatusFilter}
-                  />
-                  <FilterChip
                     label="Product"
                     value={productFilter}
-                    options={products}
+                    options={discoveryProducts.map((p) => ({
+                      value: String(p.id),
+                      label: p.name,
+                    }))}
                     onChange={setProductFilter}
-                  />
-                  <FilterChip
-                    label="Partner"
-                    value={partnerFilter}
-                    options={partners}
-                    onChange={setPartnerFilter}
                   />
                   <FilterChip
                     label="Category"
                     value={categoryFilter}
-                    options={categories}
+                    options={feed.tags || []}
                     onChange={setCategoryFilter}
                   />
                   {hasActiveFilters && (
@@ -422,7 +522,7 @@ export default function Discovery() {
                     </button>
                   )}
                   <div className="ml-auto text-[11px] text-white/18 font-mono">
-                    {filteredAssets.length.toLocaleString()} results
+                    {(totalCount || filteredAssets.length).toLocaleString()} results
                   </div>
                 </div>
               )}
@@ -444,28 +544,12 @@ export default function Discovery() {
                     }}
                   />
                 ))}
-                {statusFilter && (
-                  <ActiveChip
-                    label={statusFilter}
-                    onRemove={() => setStatusFilter("")}
-                  />
-                )}
                 {productFilter && (
                   <ActiveChip
-                    label={productFilter}
+                    label={productLabel}
                     onRemove={() => {
                       setProductFilter("");
                       if (selectedFolderId.startsWith("product:"))
-                        setSelectedFolderId("all");
-                    }}
-                  />
-                )}
-                {partnerFilter && (
-                  <ActiveChip
-                    label={partnerFilter}
-                    onRemove={() => {
-                      setPartnerFilter("");
-                      if (selectedFolderId.startsWith("partner:"))
                         setSelectedFolderId("all");
                     }}
                   />
@@ -480,9 +564,9 @@ export default function Discovery() {
                     }}
                   />
                 )}
-                {folderMeta?.briefTitle && (
+                {folderMeta?.galleryTitle && (
                   <ActiveChip
-                    label={folderMeta.briefTitle}
+                    label={folderMeta.galleryTitle}
                     onRemove={() => {
                       setFolderMeta(null);
                       setSelectedFolderId("all");
@@ -518,8 +602,11 @@ export default function Discovery() {
                     {hasActiveFilters ? "Results" : "All Assets"}
                   </h3>
                   <span className="text-[10px] text-white/12 font-mono bg-white/[0.03] px-1.5 py-0.5 rounded-md">
-                    {filteredAssets.length.toLocaleString()}
+                    {(totalCount || filteredAssets.length).toLocaleString()}
                   </span>
+                  {(listLoading || listFetching || feedLoading) && (
+                    <Loader2 size={12} className="text-white/25 animate-spin" />
+                  )}
                 </div>
               </div>
 
@@ -529,7 +616,7 @@ export default function Discovery() {
                     <AssetCard
                       key={asset.id}
                       asset={asset}
-                      onClick={setSelectedAsset}
+                      onClick={openAsset}
                       variant="compact"
                     />
                   ))}
@@ -551,14 +638,14 @@ export default function Discovery() {
                     <AssetCard
                       key={asset.id}
                       asset={asset}
-                      onClick={setSelectedAsset}
+                      onClick={openAsset}
                       variant="list"
                     />
                   ))}
                 </div>
               )}
 
-              {filteredAssets.length === 0 && (
+              {filteredAssets.length === 0 && !listLoading && (
                 <div className="flex flex-col items-center justify-center py-24">
                   <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center mb-4">
                     <Search
@@ -578,6 +665,30 @@ export default function Discovery() {
                     className="px-4 py-2 text-xs font-medium text-accent-red bg-accent-red/8 border border-accent-red/15 rounded-xl hover:bg-accent-red/12 transition-all duration-200"
                   >
                     Clear all filters
+                  </button>
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-6">
+                  <button
+                    type="button"
+                    disabled={page <= 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50 hover:text-white disabled:opacity-30"
+                  >
+                    <ChevronLeft size={12} /> Prev
+                  </button>
+                  <span className="text-[11px] text-white/30 font-mono">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page + 1 >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50 hover:text-white disabled:opacity-30"
+                  >
+                    Next <ChevronRight size={12} />
                   </button>
                 </div>
               )}
@@ -601,15 +712,9 @@ export default function Discovery() {
         <DetailPanel
           item={selectedAsset}
           type="asset"
-          onClose={() => setSelectedAsset(null)}
-          relatedAssets={assets
-            .filter(
-              (a) =>
-                a.id !== selectedAsset.id &&
-                a.product === selectedAsset.product
-            )
-            .slice(0, 4)}
-          onSelectRelated={setSelectedAsset}
+          onClose={closeAsset}
+          relatedAssets={relatedAssets}
+          onSelectRelated={openAsset}
         />
       )}
     </>
@@ -700,6 +805,10 @@ function TypeMultiSelect({ values, options, onChange }) {
 
 function FilterChip({ label, value, options, onChange }) {
   const [open, setOpen] = useState(false);
+  const items = (options || []).map((o) =>
+    typeof o === "object" ? o : { value: o, label: o }
+  );
+  const current = items.find((o) => String(o.value) === String(value));
   return (
     <div className="relative">
       <button
@@ -710,7 +819,7 @@ function FilterChip({ label, value, options, onChange }) {
             : "bg-white/[0.04] border border-white/[0.05] text-white/35 hover:text-white/50 hover:border-white/[0.08]"
         }`}
       >
-        {value || label} <ChevronDown size={10} />
+        {current?.label || label} <ChevronDown size={10} />
       </button>
       {open && (
         <>
@@ -729,21 +838,21 @@ function FilterChip({ label, value, options, onChange }) {
             >
               All {label}s
             </button>
-            {options.map((o) => (
+            {items.map((o) => (
               <button
-                key={o}
+                key={o.value}
                 onClick={() => {
-                  onChange(o);
+                  onChange(o.value);
                   setOpen(false);
                 }}
                 className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between transition-all duration-150 ${
-                  value === o
+                  String(value) === String(o.value)
                     ? "text-white bg-white/[0.04]"
                     : "text-white/40 hover:text-white hover:bg-white/[0.03]"
                 }`}
               >
-                {o}
-                {value === o && (
+                {o.label}
+                {String(value) === String(o.value) && (
                   <Check size={11} className="text-accent-red" />
                 )}
               </button>
@@ -766,7 +875,7 @@ function ActiveChip({ label, onRemove }) {
   );
 }
 
-function ProductCollectionSlider({ onSelectProduct, compact = false }) {
+function ProductCollectionSlider({ products = [], onSelectProduct, compact = false }) {
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -831,7 +940,7 @@ function ProductCollectionSlider({ onSelectProduct, compact = false }) {
         }`}
         style={{ scrollbarWidth: "none" }}
       >
-        {revoProducts.map((product) =>
+        {products.map((product) =>
           compact ? (
             <button
               key={product.id}
@@ -839,14 +948,7 @@ function ProductCollectionSlider({ onSelectProduct, compact = false }) {
               title={product.tagline}
               className="flex-shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl hover:bg-white/[0.05] transition-all duration-200 group"
             >
-              <span className="relative w-7 h-7 rounded-full bg-white overflow-hidden ring-1 ring-white/15 transition-transform duration-200 group-hover:scale-105 group-hover:ring-white/35">
-                <img
-                  src={product.thumbnail}
-                  alt={product.name}
-                  className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
-                  loading="lazy"
-                />
-              </span>
+              <ProductThumbStack product={product} size={28} compact />
               <span className="text-[11px] font-bold text-white/70 group-hover:text-white tracking-wide leading-none whitespace-nowrap">
                 {product.name}
               </span>
@@ -856,22 +958,9 @@ function ProductCollectionSlider({ onSelectProduct, compact = false }) {
               key={product.id}
               onClick={() => onSelectProduct(product)}
               title={product.tagline}
-              className="flex-shrink-0 w-[88px] group flex flex-col items-center gap-2 cursor-pointer"
+              className="flex-shrink-0 min-w-[88px] group flex flex-col items-center gap-2 cursor-pointer"
             >
-              <span className="relative w-[72px] h-[72px] rounded-full bg-white overflow-hidden ring-1 ring-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 group-hover:ring-white/35">
-                <img
-                  src={product.thumbnail}
-                  alt={product.name}
-                  className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
-                  loading="lazy"
-                />
-                <span
-                  className="absolute bottom-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none"
-                  style={{ backgroundColor: product.color }}
-                >
-                  {product.assetCount}
-                </span>
-              </span>
+              <ProductThumbStack product={product} size={72} />
               <span className="w-full text-center">
                 <span className="block text-[11px] font-bold text-white tracking-wide leading-none truncate">
                   {product.name}
@@ -888,14 +977,68 @@ function ProductCollectionSlider({ onSelectProduct, compact = false }) {
   );
 }
 
-function ProductMiniStat({ icon: Icon, label, value }) {
+function ProductThumbStack({ product, size = 72, compact = false }) {
+  const variants = (product.variants || []).filter((v) => v.thumbnail);
+  const peek = variants.slice(0, 3);
+  const offset = Math.max(6, Math.round(size * 0.12));
+  const peekScale = 0.78;
+  const frame = size + (peek.length ? offset * Math.min(peek.length, 2) : 0);
+
   return (
-    <div className="flex items-center gap-1.5">
-      <Icon size={11} className="text-white/20" />
-      <span className="text-[10px] text-white/40 font-medium">
-        {label && `${label} `}{typeof value === "number" ? value : value}
+    <span
+      className="relative flex-shrink-0"
+      style={{ width: frame, height: size }}
+    >
+      {peek.map((variant, i) => {
+        const depth = peek.length - i;
+        const peekSize = Math.round(size * peekScale);
+        return (
+          <span
+            key={variant.id}
+            className="absolute rounded-full bg-white overflow-hidden ring-1 ring-white/20 opacity-80"
+            style={{
+              width: peekSize,
+              height: peekSize,
+              left: depth * offset,
+              top: Math.round((size - peekSize) / 2 + depth * 2),
+              zIndex: i,
+            }}
+          >
+            <img
+              src={variant.thumbnail}
+              alt=""
+              className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+              loading="lazy"
+            />
+          </span>
+        );
+      })}
+      <span
+        className="absolute rounded-full bg-white overflow-hidden ring-1 ring-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 group-hover:ring-white/35"
+        style={{
+          width: size,
+          height: size,
+          left: 0,
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <img
+          src={product.thumbnail}
+          alt={product.name}
+          className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+          loading="lazy"
+        />
+        {!compact && (
+          <span
+            className="absolute bottom-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none"
+            style={{ backgroundColor: product.color }}
+          >
+            {product.assetCount}
+          </span>
+        )}
       </span>
-    </div>
+    </span>
   );
 }
 
@@ -903,12 +1046,24 @@ function ProductFullPage({ product, onBack, onAssetClick }) {
   const [activeTab, setActiveTab] = useState("all");
   const [viewLayout, setViewLayout] = useState("grid");
 
-  const productAssets = useMemo(
-    () => assets.filter((a) => a.product?.toLowerCase().includes(product.name.toLowerCase().split(" ")[0]) || Math.random() < 0.15).slice(0, 120),
-    [product]
+  const variantIds = product.variantIds?.length
+    ? product.variantIds
+    : [product.id];
+  const { items: productAssets, isLoading } = useMergedContentList(
+    {
+      page: "1",
+      size: "60",
+      sort: "date",
+    },
+    variantIds
   );
   const productBriefs = useMemo(
-    () => briefs.filter(() => Math.random() < 0.5).slice(0, 6),
+    () =>
+      briefs.filter((b) => {
+        const name = product.name?.toLowerCase() || "";
+        const bp = b.product?.toLowerCase() || "";
+        return name && bp && (bp.includes(name) || name.includes(bp));
+      }).slice(0, 6),
     [product]
   );
 
@@ -969,6 +1124,21 @@ function ProductFullPage({ product, onBack, onAssetClick }) {
                 <h1 className="text-[48px] font-black text-white tracking-tight leading-none">
                   {product.name}
                 </h1>
+                {product.variants?.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                    <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mr-1">
+                      Variants
+                    </span>
+                    {[product, ...product.variants].map((v) => (
+                      <span
+                        key={v.id}
+                        className="px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-[10px] text-white/70"
+                      >
+                        {v.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[14px] text-white/50 mt-2 max-w-lg leading-relaxed">
                   {product.description}
                 </p>
@@ -1104,9 +1274,15 @@ function ProductFullPage({ product, onBack, onAssetClick }) {
           {visibleAssets.length === 0 && activeTab !== "briefs" && (
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center mb-4">
-                <Package size={24} strokeWidth={1.2} className="text-white/10" />
+                {isLoading ? (
+                  <Loader2 size={24} className="text-white/20 animate-spin" />
+                ) : (
+                  <Package size={24} strokeWidth={1.2} className="text-white/10" />
+                )}
               </div>
-              <p className="text-sm text-white/25 font-medium">No assets in this category</p>
+              <p className="text-sm text-white/25 font-medium">
+                {isLoading ? "Loading product assets…" : "No assets in this category"}
+              </p>
               <p className="text-xs text-white/12 mt-1">Try viewing all assets instead</p>
             </div>
           )}

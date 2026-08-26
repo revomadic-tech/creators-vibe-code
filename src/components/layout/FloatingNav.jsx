@@ -15,9 +15,15 @@ import {
   Clock,
   Users,
 } from "lucide-react";
-import { currentUser, notifications, briefs, assets } from "../../data/mockData";
+import { currentUser, notifications } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import { briefPath, formatTaskDate } from "../../lib/adTaskBrief";
 import { APP_TICKER_H, APP_NAV_H, APP_GUTTER } from "./chrome";
+import { useGetContentList } from "../../api/content/hooks";
+import { unwrapList } from "../../lib/mapContentAsset";
+import useDebounce from "../../hooks/useDebounce";
+import useAuth from "../../hooks/useAuth";
+import { useLogout } from "../../api/auth/hooks";
 
 const navItems = [
   { to: "/", icon: Compass, label: "Discovery" },
@@ -37,55 +43,61 @@ export default function FloatingNav({ progress = 0, settling = false }) {
   const searchRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen } =
+  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, openTask, boardItems } =
     useCommandCenter();
   const docked = progress > 0.45;
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const { user } = useAuth();
+  const { mutate: signOut } = useLogout();
+  const debouncedSearch = useDebounce(searchQuery, 350);
+  const { data: searchResp, isFetching: searchLoading } = useGetContentList(
+    {
+      page: "1",
+      size: "8",
+      sort: "date",
+      search: debouncedSearch.trim(),
+    },
+    { enabled: debouncedSearch.trim().length >= 2 }
+  );
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
 
-    const assetResults = assets
-      .filter((a) =>
-        [a.title, a.product, a.partner, a.briefTitle]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      )
-      .slice(0, 8)
-      .map((a) => ({
-        id: `asset-${a.id}`,
-        type: "asset",
-        title: a.title,
-        thumbnail: a.thumbnail,
-        product: a.product,
-        brief: a.briefTitle || "No brief linked",
-        status: a.status,
-        dateSubmitted: a.dateSubmitted,
-        onClick: () => navigate(`/?assetId=${a.id}`),
-      }));
+    const assetResults = unwrapList(searchResp).items.map((a) => ({
+      id: `asset-${a.id}`,
+      type: "asset",
+      title: a.title,
+      thumbnail: a.thumbnail,
+      product: a.product,
+      brief: a.campaignNames?.[0] || "Library asset",
+      status: a.status,
+      dateSubmitted: a.dateSubmitted,
+      onClick: () => navigate(`/?assetId=${a.id}`),
+    }));
 
-    const briefResults = briefs
-      .filter((b) =>
-        [b.title, b.product, b.partner]
+    const briefResults = boardItems
+      .filter((item) =>
+        [item.name, item.product, item.status, item.angle, item.adCopy, ...(item.editors || [])]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q))
       )
       .slice(0, 4)
-      .map((b) => ({
-        id: `brief-${b.id}`,
+      .map((item) => ({
+        id: `brief-${item.id}`,
         type: "brief",
-        title: b.title,
-        thumbnail: b.thumbnail,
-        product: b.product,
+        title: item.product ? `${item.name} · ${item.product}` : item.name,
+        thumbnail: null,
+        product: item.product,
         brief: "Brief",
-        status: b.status,
-        dateSubmitted: b.dueDate,
-        onClick: () => navigate(`/briefs?briefId=${b.id}`),
+        status: item.status,
+        dateSubmitted: formatTaskDate(item.dueDate),
+        onClick: () => navigate(briefPath(item)),
       }));
 
     return [...assetResults, ...briefResults].slice(0, 10);
-  }, [searchQuery, navigate]);
+  }, [searchQuery, searchResp, navigate, boardItems]);
 
   useEffect(() => {
     setShowNotifications(false);
@@ -149,10 +161,10 @@ export default function FloatingNav({ progress = 0, settling = false }) {
       }}
     >
       <div
-        className="flex items-center justify-between gap-3 w-full px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl"
+        className="flex items-center justify-between gap-3 w-full min-w-0 px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl overflow-hidden"
         style={{ backgroundColor: "rgba(25, 30, 41, 0.42)" }}
       >
-        <div className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
+        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
         <button
           type="button"
           data-command-gesture-handle
@@ -247,8 +259,17 @@ export default function FloatingNav({ progress = 0, settling = false }) {
               )}
             </button>
 
-            <button className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.08] hover:border-white/[0.18] transition-all duration-200 flex-shrink-0">
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.08] hover:border-white/[0.18] transition-all duration-200 flex-shrink-0"
+              title="Sign out"
+            >
+              <img
+                src={user?.avatar || user?.image || currentUser.avatar}
+                alt={user?.name || currentUser.name}
+                className="w-full h-full object-cover"
+              />
             </button>
           </>
         )}
@@ -289,7 +310,13 @@ export default function FloatingNav({ progress = 0, settling = false }) {
                   }}
                   className="w-full flex items-center gap-2.5 rounded-xl border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.1] p-2 text-left transition-all duration-200"
                 >
-                  <img src={result.thumbnail} alt={result.title} className="w-14 h-10 rounded-lg object-cover img-cinematic flex-shrink-0" />
+                  {result.thumbnail ? (
+                    <img src={result.thumbnail} alt={result.title} className="w-14 h-10 rounded-lg object-cover img-cinematic flex-shrink-0" />
+                  ) : (
+                    <span className="w-14 h-10 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                      <FileText size={14} className="text-white/30" />
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[11px] text-white/75 font-semibold truncate">{result.title}</p>
@@ -310,7 +337,9 @@ export default function FloatingNav({ progress = 0, settling = false }) {
             </div>
           ) : (
             <div className="px-4 pb-3.5 text-[11px] text-white/25">
-              {searchQuery.trim() ? "No matching assets or briefs." : (
+              {searchQuery.trim() ? (
+                searchLoading ? "Searching library…" : "No matching assets or briefs."
+              ) : (
                 <span className="flex items-center gap-1.5">
                   <Command size={10} /> <span className="font-mono">K</span> to search
                 </span>
@@ -330,9 +359,17 @@ export default function FloatingNav({ progress = 0, settling = false }) {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {notifications.map((n) => (
-              <div
+              <button
+                type="button"
                 key={n.id}
-                className={`px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer ${
+                onClick={() => {
+                  if (n.taskRef) {
+                    openTask(n.taskRef);
+                    setCanvasOpen(true);
+                  }
+                  setShowNotifications(false);
+                }}
+                className={`w-full text-left px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer ${
                   !n.read ? "bg-white/[0.015]" : ""
                 }`}
               >
@@ -345,7 +382,7 @@ export default function FloatingNav({ progress = 0, settling = false }) {
                     <p className="text-[11px] text-white/25 mt-1">{n.time}</p>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

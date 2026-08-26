@@ -8,6 +8,7 @@ import {
   Inbox,
   MessageSquare,
   Paperclip,
+  PanelLeftClose,
   PenSquare,
   Search,
   Send,
@@ -629,10 +630,99 @@ function NewConversation({ conversations, onClose, onPick }) {
   );
 }
 
+function UnreadBadge({ count, className = "" }) {
+  if (!count) return null;
+  return (
+    <span
+      className={`flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E8C4A0] px-1 text-[8px] font-bold text-[#191e29] ${className}`}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+function CollapsedRail({
+  conversations,
+  activity,
+  onExpand,
+  onOpenConversation,
+  onOpenActivity,
+}) {
+  const unreads = conversations.filter((c) => c.unread > 0);
+  const activityUnread = activity.filter((a) => a.unread).length;
+  const totalUnread =
+    unreads.reduce((n, c) => n + (c.unread || 0), 0) + activityUnread;
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col items-center">
+      <div
+        className="relative flex h-[52px] w-full shrink-0 items-center justify-center border-b border-white/10"
+        style={{ background: NAVY }}
+      >
+        <button
+          type="button"
+          onClick={onExpand}
+          aria-expanded={false}
+          aria-label="Open team chat"
+          title="Open team chat"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-[#E8C4A0] hover:bg-white/10"
+        >
+          <MessageSquare size={16} />
+          <UnreadBadge
+            count={totalUnread}
+            className="absolute -right-0.5 -top-0.5"
+          />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-1.5 py-2">
+        {unreads.map((conv) => {
+          const title = conversationTitle(conv);
+          return (
+            <button
+              key={conv.id}
+              type="button"
+              aria-label={`${title}, ${conv.unread} new`}
+              title={`${title} · ${conv.unread} new`}
+              onClick={() => onOpenConversation(conv.id)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/[0.08]"
+            >
+              <ConvAvatar conv={conv} size="xs" />
+              <UnreadBadge
+                count={conv.unread}
+                className="absolute -right-0.5 -top-0.5"
+              />
+            </button>
+          );
+        })}
+        {activityUnread > 0 && (
+          <button
+            type="button"
+            aria-label={`${activityUnread} mention${activityUnread === 1 ? "" : "s"}`}
+            title={`${activityUnread} mention${activityUnread === 1 ? "" : "s"}`}
+            onClick={onOpenActivity}
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/[0.08]"
+          >
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: "rgba(139,92,246,0.22)", color: "#c4b5fd" }}
+            >
+              <AtSign size={13} />
+            </div>
+            <UnreadBadge
+              count={activityUnread}
+              className="absolute -right-0.5 -top-0.5"
+            />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Team Chat pane — fills the Command Center staff column.
  */
-export default function TeamChat() {
+export default function TeamChat({ collapsed, onCollapsedChange }) {
   const [conversations, setConversations] = useState(teamChatSeed.conversations);
   const [messagesById, setMessagesById] = useState(teamChatSeed.messages);
   const [activity, setActivity] = useState(teamChatSeed.activity);
@@ -654,7 +744,10 @@ export default function TeamChat() {
   const messages = (activeId && messagesById[activeId]) || [];
   const activityUnread = activity.filter((a) => a.unread).length;
 
+  const expand = () => onCollapsedChange?.(false);
+
   const openChat = (id) => {
+    expand();
     setActiveId(id);
     setShowChat(true);
     setFilter("all");
@@ -732,6 +825,23 @@ export default function TeamChat() {
   const iconBtn =
     "shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-stone-400 hover:text-[#F7F5F2] hover:bg-white/10";
 
+  if (collapsed) {
+    return (
+      <CollapsedRail
+        conversations={conversations}
+        activity={activity}
+        onExpand={expand}
+        onOpenConversation={openChat}
+        onOpenActivity={() => {
+          expand();
+          setShowChat(false);
+          setActiveId(null);
+          setFilter("activity");
+        }}
+      />
+    );
+  }
+
   return (
     <div
       data-page-demo="command-team-chat"
@@ -774,6 +884,15 @@ export default function TeamChat() {
             className="w-full h-7 pl-7 pr-3 rounded-full bg-white/10 border border-white/10 text-[11px] text-[#F7F5F2] placeholder:text-stone-500 outline-none focus:border-[#E8C4A0]/40"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => onCollapsedChange?.(true)}
+          title="Collapse chat"
+          aria-expanded="true"
+          className={iconBtn}
+        >
+          <PanelLeftClose size={15} />
+        </button>
       </div>
 
       <div className="relative flex-1 min-h-0 flex">

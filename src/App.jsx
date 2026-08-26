@@ -5,6 +5,8 @@ import Briefs from "./pages/Briefs";
 import Galleries from "./pages/Galleries";
 import BrandGuidelines from "./pages/BrandGuidelines";
 import Admin from "./pages/Admin";
+import Login from "./pages/Login";
+import { AuthGuard, GuestGuard } from "./components/auth/AuthGuard";
 
 function RedirectDiscovery() {
   const { search } = useLocation();
@@ -15,7 +17,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppShell />}>
+        <Route
+          path="/login"
+          element={
+            <GuestGuard>
+              <Login />
+            </GuestGuard>
+          }
+        />
+        <Route
+          element={
+            <AuthGuard>
+              <AppShell />
+            </AuthGuard>
+          }
+        >
           <Route index element={<Discovery />} />
           <Route path="discovery" element={<RedirectDiscovery />} />
           <Route path="briefs" element={<Briefs />} />

@@ -24,6 +24,36 @@ export const teamMembers = [
   { id: 8, name: "Elena Volkov", role: "Photographer", avatar: FACE(9), status: "away", portrait: IMG("portrait8", 500, 700), socials: { x: true, instagram: true, dribbble: false, linkedin: true, github: true }, color: "#06b6d4", stats: { assetsDelivered: 389, approvalRate: 95, avgTurnaround: "1.9d", activeBriefs: 2, impressions: "1.1M", topCategory: "Photo", deliveredThisMonth: 31, revisionsAvg: 0.5 }, adStats: { editsDelivered: 112, adSpendAttributed: 52800, ctr: 3.6, cpm: 11.8, roas: 4.6, thumbStopRate: 46, hookRate: 62, creativeWinRate: 28 }, organicStats: { editsDelivered: 277, totalViews: 1100000, avgWatchTime: 16.4, saveRate: 5.8, shareRate: 3.6, completionRate: 58, viralCoeff: 1.3, avgEngRate: 7.8 } },
 ];
 
+export const workspaceUsers = [currentUser, ...teamMembers];
+
+/** Monday.com people-column names → Create workspace users. */
+const PEOPLE_ALIASES = {
+  "chris r": "Aisha Patel",
+  "john m.": "Tariq Hassan",
+  "john m": "Tariq Hassan",
+  "kris gigante": "Luna Rivera",
+  "alex delic": "James Okafor",
+  "luka": "Mika Tanaka",
+  "danilo d": "Sofia Andersson",
+};
+
+/** Resolve a board people-column value to a Create workspace user. */
+export function findWorkspaceUser(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return null;
+  const aliased = PEOPLE_ALIASES[raw.toLowerCase()] || raw;
+  const n = aliased.toLowerCase();
+  return (
+    workspaceUsers.find((u) => u.name.toLowerCase() === n) ||
+    workspaceUsers.find((u) => {
+      const first = (u.name.split(" ")[0] || "").toLowerCase();
+      const other = n.split(/[\s.]+/)[0];
+      return first && other && first === other;
+    }) ||
+    null
+  );
+}
+
 export const products = [
   "REVO Core", "REVO Sport", "REVO Luxe", "REVO Kids",
   "REVO Home", "REVO Travel", "REVO Studio", "REVO x Puma",
@@ -408,11 +438,11 @@ export const brandGuidelines = {
 };
 
 export const notifications = [
-  { id: 1, type: "review", message: "Aisha submitted 30s cutdown for review", time: "5m ago", read: false },
-  { id: 2, type: "comment", message: "Marcus commented on Lifestyle Urban Series", time: "22m ago", read: false },
-  { id: 3, type: "approval", message: "REVO Kids Illustration Series approved", time: "1h ago", read: false },
-  { id: 4, type: "assignment", message: "You've been assigned to Travel Campaign Q3", time: "2h ago", read: true },
-  { id: 5, type: "delivery", message: "Brand Film final export completed", time: "3h ago", read: true },
+  { id: 1, type: "review", message: "Aisha submitted 30s cutdown for review", time: "5m ago", read: false, taskRef: "#1639" },
+  { id: 2, type: "comment", message: "Marcus commented on Lifestyle Urban Series", time: "22m ago", read: false, taskRef: "#1721" },
+  { id: 3, type: "approval", message: "REVO Kids Illustration Series approved", time: "1h ago", read: false, taskRef: "#1712" },
+  { id: 4, type: "assignment", message: "You've been assigned to Travel Campaign Q3", time: "2h ago", read: true, taskRef: "#1619" },
+  { id: 5, type: "delivery", message: "Brand Film final export completed", time: "3h ago", read: true, taskRef: "#1676" },
 ];
 
 export const announcements = [

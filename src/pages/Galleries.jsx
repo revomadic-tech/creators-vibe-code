@@ -10,6 +10,7 @@ import {
   Clock,
   ExternalLink,
   Download,
+  Loader2,
 } from "lucide-react";
 import DetailPanel from "../components/layout/DetailPanel";
 import GalleryCard from "../components/shared/GalleryCard";
@@ -18,7 +19,9 @@ import { FilterDropdown } from "../components/ui/FilterBar";
 import ViewToggle from "../components/ui/ViewToggle";
 import EmptyState from "../components/ui/EmptyState";
 import { Tag } from "../components/ui/Tag";
-import { galleries, assets, assetTypes } from "../data/mockData";
+import { useGetGalleries } from "../api/content-gallery/hooks";
+import { useGetContentList } from "../api/content/hooks";
+import { unwrapGalleries, unwrapList } from "../lib/mapContentAsset";
 
 const layoutOptions = [
   { value: "grid", icon: LayoutGrid },
@@ -32,6 +35,9 @@ export default function Galleries() {
   const [interiorType, setInteriorType] = useState("");
   const [interiorLayout, setInteriorLayout] = useState("grid");
 
+  const { data: galleriesResp, isLoading } = useGetGalleries();
+  const galleries = unwrapGalleries(galleriesResp);
+
   const filtered = useMemo(() => {
     if (!search.trim()) return galleries;
     const q = search.toLowerCase();
@@ -41,16 +47,30 @@ export default function Galleries() {
         g.description?.toLowerCase().includes(q) ||
         g.tags?.some((t) => t.toLowerCase().includes(q))
     );
-  }, [search]);
+  }, [search, galleries]);
+
+  const galleryIds = selectedGallery?.assetIds || [];
+  const { data: assetsResp, isFetching: assetsLoading } = useGetContentList(
+    {
+      page: "1",
+      size: String(Math.max(galleryIds.length, 1)),
+      sort: "date",
+      ids: galleryIds.join(","),
+    },
+    { enabled: galleryIds.length > 0 }
+  );
+  const loadedAssets = unwrapList(assetsResp).items;
+  const interiorTypes = [
+    ...new Set(loadedAssets.map((a) => a.type).filter(Boolean)),
+  ];
 
   const galleryAssets = useMemo(() => {
     if (!selectedGallery) return [];
-    const pool = assets.slice(0, selectedGallery.assetCount || 12);
-    return pool.filter((a) => {
+    return loadedAssets.filter((a) => {
       if (interiorType && a.type !== interiorType) return false;
       return true;
     });
-  }, [selectedGallery, interiorType]);
+  }, [selectedGallery, interiorType, loadedAssets]);
 
   const openGallery = (g) => {
     setSelectedGallery(g);
@@ -97,7 +117,11 @@ export default function Galleries() {
           </div>
 
           {/* Gallery Grid */}
-          {filtered.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-white/30 text-xs py-12">
+              <Loader2 size={14} className="animate-spin" /> Loading galleries…
+            </div>
+          ) : filtered.length > 0 ? (
             <div className="grid grid-cols-3 gap-3">
               {filtered.map((gallery) => (
                 <GalleryCard
@@ -123,10 +147,12 @@ export default function Galleries() {
         <GallerySidePanel
           gallery={selectedGallery}
           galleryAssets={galleryAssets}
+          assetsLoading={assetsLoading}
           interiorType={interiorType}
           setInteriorType={setInteriorType}
           interiorLayout={interiorLayout}
           setInteriorLayout={setInteriorLayout}
+          interiorTypes={interiorTypes}
           onClose={() => setSelectedGallery(null)}
           onSelectAsset={(a) => setSelectedAsset(a)}
         />
@@ -146,10 +172,12 @@ export default function Galleries() {
 function GallerySidePanel({
   gallery,
   galleryAssets,
+  assetsLoading,
   interiorType,
   setInteriorType,
   interiorLayout,
   setInteriorLayout,
+  interiorTypes,
   onClose,
   onSelectAsset,
 }) {
@@ -159,7 +187,7 @@ function GallerySidePanel({
       <div className="fixed right-6 top-1/2 -translate-y-1/2 z-50 w-[520px] max-h-[80vh] flex flex-col glass-panel rounded-2xl border border-white/[0.08] animate-expand-popup shadow-2xl shadow-black/50 overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
-          <img src={gallery.thumbnail} alt="" className="w-10 h-10 rounded-xl object-cover img-cinematic flex-shrink-0 ring-1 ring-white/[0.08]" />
+          <img src={gallery.thumbnail || gallery.coverImages?.[0]} alt="" className="w-10 h-10 rounded-xl object-cover img-cinematic flex-shrink-0 ring-1 ring-white/[0.08] bg-white/[0.04]" />
           <div className="flex-1 min-w-0">
             <h3 className="text-[14px] font-bold text-white truncate">{gallery.title}</h3>
             <div className="flex items-center gap-2 mt-0.5">
@@ -181,7 +209,7 @@ function GallerySidePanel({
 
         {/* Filter bar */}
         <div className="flex items-center gap-2 px-5 py-2 border-b border-white/[0.04] flex-shrink-0">
-          <FilterDropdown label="All Types" value={interiorType} options={assetTypes} onChange={setInteriorType} />
+          <FilterDropdown label="All Types" value={interiorType} options={interiorTypes} onChange={setInteriorType} />
           {gallery.tags?.length > 0 && (
             <div className="flex items-center gap-1 ml-2">
               {gallery.tags.map((t) => (<Tag key={t}>{t}</Tag>))}
@@ -194,7 +222,11 @@ function GallerySidePanel({
 
         {/* Asset cards */}
         <div className="flex-1 overflow-y-auto p-3 custom-scroll">
-          {galleryAssets.length > 0 ? (
+          {assetsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-white/30 text-xs">
+              <Loader2 size={14} className="animate-spin" /> Loading assets…
+            </div>
+          ) : galleryAssets.length > 0 ? (
             <div className={`grid gap-2 ${interiorLayout === "grid" ? "grid-cols-3" : "grid-cols-4"}`}>
               {galleryAssets.map((asset) => (
                 <div
