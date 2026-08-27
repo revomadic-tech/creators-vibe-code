@@ -15,7 +15,7 @@ function loadCollapsed() {
 }
 
 /**
- * Command Center staff column — Team Chat.
+ * Persistent Team Chat column — visible in studio and Command Center.
  * Collapsed by default into a notification-icon rail.
  */
 export default function StaffPanel({ className = "" }) {
@@ -32,10 +32,10 @@ export default function StaffPanel({ className = "" }) {
   return (
     <aside
       data-command-interactive
-      className={`glass-panel rounded-2xl border border-white/[0.08] flex-col min-h-0 overflow-hidden transition-[width] duration-200 ease-out ${
-        collapsed ? "w-16" : "w-[320px] xl:w-[345px]"
+      className={`glass-panel rounded-2xl border border-[#E8C4A0]/20 flex-col min-h-0 overflow-hidden transition-[width] duration-200 ease-out ${
+        collapsed ? "w-16" : "w-[420px] xl:w-[500px]"
       } ${className}`}
-      style={{ background: "rgba(255, 255, 255, 0.03)" }}
+      style={{ background: "rgba(22, 22, 24, 0.62)" }}
     >
       <TeamChat collapsed={collapsed} onCollapsedChange={setCollapsed} />
     </aside>

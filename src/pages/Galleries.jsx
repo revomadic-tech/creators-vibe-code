@@ -80,7 +80,7 @@ export default function Galleries() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
         <div className="px-6 pb-6 pt-16 fade-in">
           {/* Header */}
           <div className="flex items-end justify-between mb-6">

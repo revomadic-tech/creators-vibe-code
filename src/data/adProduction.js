@@ -16,21 +16,21 @@ export const AD_PHASES = [
 // Full column set — every field the local monday.com snapshot carries is a
 // real column, visible by default. Hide/reorder via the Columns picker.
 export const AD_BOARD_COLUMNS = [
-  { id: "item", label: "Item", width: 188, minWidth: 140, pinned: true, hideable: false },
-  { id: "status", label: "Status", width: 148, minWidth: 112 },
-  { id: "product", label: "Product", width: 168, minWidth: 128 },
-  { id: "priority", label: "Priority", width: 104, minWidth: 88 },
-  { id: "editor", label: "Editor", width: 72, minWidth: 56 },
-  { id: "angle", label: "Angle", width: 120, minWidth: 92 },
-  { id: "due", label: "Due", width: 80, minWidth: 68 },
-  { id: "style", label: "Style", width: 128, minWidth: 96 },
-  { id: "platform", label: "Platform", width: 100, minWidth: 84 },
-  { id: "painPoint", label: "Pain Point", width: 132, minWidth: 100 },
-  { id: "strategist", label: "Strategist", width: 72, minWidth: 56 },
-  { id: "sendDate", label: "Send Date", width: 88, minWidth: 76 },
-  { id: "performance", label: "Performance", width: 112, minWidth: 96 },
-  { id: "summary", label: "Summary", width: 96, minWidth: 80 },
-  { id: "adCopy", label: "Ad Copy", width: 240, minWidth: 128 },
+  { id: "item", label: "Item", width: 220, minWidth: 160, pinned: true, hideable: false },
+  { id: "status", label: "Status", width: 128, minWidth: 96 },
+  { id: "product", label: "Product", width: 72, minWidth: 56 },
+  { id: "priority", label: "Priority", width: 96, minWidth: 80 },
+  { id: "editor", label: "Editor", width: 64, minWidth: 52 },
+  { id: "angle", label: "Angle", width: 108, minWidth: 84 },
+  { id: "due", label: "Due", width: 72, minWidth: 64 },
+  { id: "style", label: "Style", width: 108, minWidth: 84 },
+  { id: "platform", label: "Platform", width: 76, minWidth: 60 },
+  { id: "painPoint", label: "Pain Point", width: 112, minWidth: 88 },
+  { id: "strategist", label: "Strategist", width: 64, minWidth: 52 },
+  { id: "sendDate", label: "Send Date", width: 80, minWidth: 68 },
+  { id: "performance", label: "Performance", width: 104, minWidth: 84 },
+  { id: "summary", label: "Summary", width: 80, minWidth: 64 },
+  { id: "adCopy", label: "Ad Copy", width: 180, minWidth: 112 },
 ];
 
 // Label→color maps mirrored from the live monday.com board's dropdowns.
@@ -202,11 +202,56 @@ export const AD_PERFORMANCE_COLORS = {
   Winner: "#037f4c",
 };
 
+export const AD_STATUS_OPTIONS = Object.keys(AD_STATUS_COLORS);
+export const AD_PRIORITY_OPTIONS = Object.keys(AD_PRIORITY_COLORS);
+export const AD_PRODUCT_OPTIONS = Object.keys(AD_PRODUCT_COLORS);
+export const AD_EDITING_STYLE_OPTIONS = Object.keys(AD_EDITING_STYLE_COLORS);
+export const AD_ANGLE_OPTIONS = Object.keys(AD_ANGLE_COLORS);
+export const AD_PAIN_POINT_OPTIONS = Object.keys(AD_PAIN_POINT_COLORS);
+export const AD_PLATFORM_OPTIONS = Object.keys(AD_PLATFORM_COLORS);
+export const AD_PERFORMANCE_OPTIONS = Object.keys(AD_PERFORMANCE_COLORS);
+
 export { adProductionSeed };
 
 export const BOARD_LAYOUT_KEY = "revo.commandCenter.boardLayout.v1";
 
 const PHASE_IDS = new Set(AD_PHASES.map((p) => p.id));
+
+export const PATCHABLE_FIELDS = [
+  "status",
+  "product",
+  "priority",
+  "editingStyle",
+  "angle",
+  "painPoint",
+  "platform",
+  "editors",
+  "creativeStrategists",
+  "dueDate",
+  "sendDate",
+  "summary",
+  "adCopy",
+  "performance",
+  "name",
+  "contentIds",
+];
+
+function valuesEqual(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function applyPatch(item, patch) {
+  if (!patch || typeof patch !== "object") return item;
+  const next = { ...item };
+  let changed = false;
+  for (const key of PATCHABLE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+    if (valuesEqual(item[key], patch[key])) continue;
+    next[key] = patch[key];
+    changed = true;
+  }
+  return changed ? next : item;
+}
 
 /** Resolve a board item by monday id, `#1683`, or `1683`. */
 export function findAdTask(ref, list = adProductionSeed) {
@@ -224,10 +269,12 @@ export function loadBoardItems() {
     const saved = JSON.parse(localStorage.getItem(BOARD_LAYOUT_KEY) || "null");
     if (!saved || typeof saved !== "object") return seed;
     const phases = saved.phases && typeof saved.phases === "object" ? saved.phases : {};
+    const patches = saved.patches && typeof saved.patches === "object" ? saved.patches : {};
     const byId = Object.fromEntries(
       seed.map((item) => {
+        const patched = applyPatch(item, patches[item.id]);
         const phase = phases[item.id];
-        return [item.id, phase && PHASE_IDS.has(phase) ? { ...item, phase } : { ...item }];
+        return [item.id, phase && PHASE_IDS.has(phase) ? { ...patched, phase } : patched];
       }),
     );
     const next = [];
@@ -249,16 +296,39 @@ export function loadBoardItems() {
 
 export function persistBoardItems(items) {
   try {
+    const seedById = Object.fromEntries(adProductionSeed.map((item) => [item.id, item]));
+    const patches = {};
+    for (const item of items) {
+      const seed = seedById[item.id];
+      if (!seed) continue;
+      const patch = {};
+      for (const key of PATCHABLE_FIELDS) {
+        if (!valuesEqual(item[key], seed[key])) patch[key] = item[key] ?? null;
+      }
+      if (Object.keys(patch).length) patches[item.id] = patch;
+    }
     localStorage.setItem(
       BOARD_LAYOUT_KEY,
       JSON.stringify({
         phases: Object.fromEntries(items.map((item) => [item.id, item.phase])),
         order: items.map((item) => item.id),
+        patches,
       }),
     );
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+/** Patch task fields. Phase changes go through `moveBoardTask` so order stays intact. */
+export function updateBoardTask(items, taskId, patch) {
+  const idx = items.findIndex((item) => item.id === taskId);
+  if (idx < 0) return items;
+  const nextItem = applyPatch(items[idx], patch);
+  if (nextItem === items[idx]) return items;
+  const next = items.slice();
+  next[idx] = nextItem;
+  return next;
 }
 
 export function parseTaskDrag(data) {

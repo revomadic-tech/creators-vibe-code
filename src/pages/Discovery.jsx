@@ -20,12 +20,6 @@ import {
   Upload,
   ArrowRight,
   ArrowLeft,
-  Package,
-  Grid2X2,
-  FileText,
-  Users,
-  BarChart3,
-  Image,
   PanelLeftOpen,
   Loader2,
   ChevronLeft,
@@ -33,9 +27,7 @@ import {
 } from "lucide-react";
 import DetailPanel from "../components/layout/DetailPanel";
 import AssetCard from "../components/shared/AssetCard";
-import TeamShowcase from "../components/shared/TeamShowcase";
 import FolderTree from "../components/shared/FolderTree";
-import { teamMembers, briefs } from "../data/mockData";
 import {
   useGetContentById,
   useGetContentDiscoveryFeed,
@@ -88,7 +80,6 @@ export default function Discovery() {
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [activeProduct, setActiveProduct] = useState(null);
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [folderMeta, setFolderMeta] = useState(null);
   const [folderHidden, setFolderHidden] = useState(true);
@@ -134,8 +125,12 @@ export default function Discovery() {
     [patchParams]
   );
 
-  const { data: feedResp, isLoading: feedLoading } =
-    useGetContentDiscoveryFeed();
+  const {
+    data: feedResp,
+    isLoading: feedLoading,
+    isError: feedError,
+    refetch: refetchFeed,
+  } = useGetContentDiscoveryFeed();
   const feed = unwrapFeed(feedResp) || EMPTY_FEED;
   const discoveryProducts = useMemo(
     () =>
@@ -186,7 +181,14 @@ export default function Discovery() {
     pages: totalPagesRaw,
     isLoading: listLoading,
     isFetching: listFetching,
+    isError: listError,
+    refetch: refetchList,
   } = useMergedContentList(listPayload, queryProductIds);
+  const loadError = feedError || listError;
+  const retryLoad = useCallback(() => {
+    refetchFeed();
+    refetchList?.();
+  }, [refetchFeed, refetchList]);
   const totalPages = totalPagesRaw || 1;
 
   const deepLinkId = assetIdParam && !Number.isNaN(Number(assetIdParam))
@@ -299,26 +301,16 @@ export default function Discovery() {
 
   const currentSort = sortOptions.find((s) => s.value === sortBy);
 
-  if (activeProduct) {
-    return (
-      <>
-        <ProductFullPage
-          product={activeProduct}
-          onBack={() => setActiveProduct(null)}
-          onAssetClick={openAsset}
-        />
-        {selectedAsset && (
-          <DetailPanel
-            item={selectedAsset}
-            type="asset"
-            onClose={closeAsset}
-            relatedAssets={relatedAssets}
-            onSelectRelated={openAsset}
-          />
-        )}
-      </>
-    );
-  }
+  const handleSelectProduct = useCallback(
+    (product) => {
+      const id = String(product.id);
+      const isSame =
+        String(productFilter) === id ||
+        (product.variantIds || []).map(String).includes(String(productFilter));
+      setProductFilter(isSame ? "" : id);
+    },
+    [productFilter, setProductFilter]
+  );
 
   return (
     <>
@@ -339,11 +331,10 @@ export default function Discovery() {
               onHide={() => setFolderHidden(true)}
             />
           )}
-          <div className="flex-1 min-w-0 overflow-y-auto">
-            {!hasActiveFilters && (
+          <div className="flex-1 min-w-0 overflow-y-auto" data-shell-page-scroll>
             <div className="px-6">
               {/* Just Landed — above library filters */}
-              {newAssets.length > 0 && (
+              {!hasActiveFilters && newAssets.length > 0 && (
                 <div className="mb-6 pt-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -374,15 +365,17 @@ export default function Discovery() {
                 </div>
               )}
 
-              {/* Product collections — above command bar */}
-              <div className="mb-6">
-                <ProductCollectionSlider
-                  products={discoveryProducts}
-                  onSelectProduct={setActiveProduct}
-                />
-              </div>
+              {/* Product collections — filters the asset grid below */}
+              {discoveryProducts.length > 0 && (
+                <div className={`mb-6 ${hasActiveFilters || newAssets.length === 0 ? "pt-4" : ""}`}>
+                  <ProductCollectionSlider
+                    products={discoveryProducts}
+                    selectedId={productFilter}
+                    onSelectProduct={handleSelectProduct}
+                  />
+                </div>
+              )}
             </div>
-            )}
 
             {/* Command Bar */}
             <div className="sticky top-0 z-20 command-bar px-6 py-3">
@@ -654,18 +647,38 @@ export default function Discovery() {
                       className="text-white/10"
                     />
                   </div>
-                  <p className="text-sm text-white/25 font-medium">
-                    No assets match your criteria
-                  </p>
-                  <p className="text-xs text-white/12 mt-1 mb-3">
-                    Try adjusting your filters
-                  </p>
-                  <button
-                    onClick={clearAll}
-                    className="px-4 py-2 text-xs font-medium text-accent-red bg-accent-red/8 border border-accent-red/15 rounded-xl hover:bg-accent-red/12 transition-all duration-200"
-                  >
-                    Clear all filters
-                  </button>
+                  {loadError ? (
+                    <>
+                      <p className="text-sm text-white/25 font-medium">
+                        Couldn’t load the library
+                      </p>
+                      <p className="text-xs text-white/12 mt-1 mb-3">
+                        The content API didn’t respond. Retry in a moment.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryLoad}
+                        className="px-4 py-2 text-xs font-medium text-accent-red bg-accent-red/8 border border-accent-red/15 rounded-xl hover:bg-accent-red/12 transition-all duration-200"
+                      >
+                        Retry
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-white/25 font-medium">
+                        No assets match your criteria
+                      </p>
+                      <p className="text-xs text-white/12 mt-1 mb-3">
+                        Try adjusting your filters
+                      </p>
+                      <button
+                        onClick={clearAll}
+                        className="px-4 py-2 text-xs font-medium text-accent-red bg-accent-red/8 border border-accent-red/15 rounded-xl hover:bg-accent-red/12 transition-all duration-200"
+                      >
+                        Clear all filters
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -692,16 +705,6 @@ export default function Discovery() {
                   </button>
                 </div>
               )}
-            </div>
-
-            {/* Editors Behind the Work */}
-            <div className="mt-8 mb-4">
-              <TeamShowcase
-                title="Editors Behind"
-                titleAccent="the Work"
-                subtitle="The creative talent producing and refining REVO's 30,000+ asset library."
-                members={teamMembers}
-              />
             </div>
           </div>
           </div>
@@ -875,7 +878,12 @@ function ActiveChip({ label, onRemove }) {
   );
 }
 
-function ProductCollectionSlider({ products = [], onSelectProduct, compact = false }) {
+function ProductCollectionSlider({
+  products = [],
+  onSelectProduct,
+  selectedId = "",
+  compact = false,
+}) {
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -940,44 +948,62 @@ function ProductCollectionSlider({ products = [], onSelectProduct, compact = fal
         }`}
         style={{ scrollbarWidth: "none" }}
       >
-        {products.map((product) =>
-          compact ? (
+        {products.map((product) => {
+          const selected =
+            Boolean(selectedId) &&
+            (String(product.id) === String(selectedId) ||
+              (product.variantIds || []).map(String).includes(String(selectedId)));
+          return compact ? (
             <button
               key={product.id}
+              type="button"
               onClick={() => onSelectProduct(product)}
               title={product.tagline}
-              className="flex-shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl hover:bg-white/[0.05] transition-all duration-200 group"
+              aria-pressed={selected}
+              className={`flex-shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl transition-all duration-200 group ${
+                selected ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"
+              }`}
             >
-              <ProductThumbStack product={product} size={28} compact />
-              <span className="text-[11px] font-bold text-white/70 group-hover:text-white tracking-wide leading-none whitespace-nowrap">
+              <ProductThumbStack product={product} size={28} compact selected={selected} />
+              <span
+                className={`text-[11px] font-bold tracking-wide leading-none whitespace-nowrap ${
+                  selected ? "text-white" : "text-white/70 group-hover:text-white"
+                }`}
+              >
                 {product.name}
               </span>
             </button>
           ) : (
             <button
               key={product.id}
+              type="button"
               onClick={() => onSelectProduct(product)}
               title={product.tagline}
+              aria-pressed={selected}
               className="flex-shrink-0 min-w-[88px] group flex flex-col items-center gap-2 cursor-pointer"
             >
-              <ProductThumbStack product={product} size={72} />
+              <ProductThumbStack product={product} size={72} selected={selected} />
               <span className="w-full text-center">
                 <span className="block text-[11px] font-bold text-white tracking-wide leading-none truncate">
                   {product.name}
                 </span>
-                <span className="block text-[9px] text-white/35 mt-1 truncate">
+                <span
+                  className={`block text-[9px] mt-1 truncate ${
+                    selected ? "text-accent-red/80" : "text-white/35"
+                  }`}
+                >
                   {product.tagline}
                 </span>
               </span>
             </button>
-          )
-        )}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ProductThumbStack({ product, size = 72, compact = false }) {
+function ProductThumbStack({ product, size = 72, compact = false, selected = false }) {
   const variants = (product.variants || []).filter((v) => v.thumbnail);
   const peek = variants.slice(0, 3);
   const offset = Math.max(6, Math.round(size * 0.12));
@@ -1014,7 +1040,11 @@ function ProductThumbStack({ product, size = 72, compact = false }) {
         );
       })}
       <span
-        className="absolute rounded-full bg-white overflow-hidden ring-1 ring-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 group-hover:ring-white/35"
+        className={`absolute rounded-full bg-white overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 ${
+          selected
+            ? "ring-2 ring-accent-red/80"
+            : "ring-1 ring-white/15 group-hover:ring-white/35"
+        }`}
         style={{
           width: size,
           height: size,
@@ -1039,269 +1069,5 @@ function ProductThumbStack({ product, size = 72, compact = false }) {
         )}
       </span>
     </span>
-  );
-}
-
-function ProductFullPage({ product, onBack, onAssetClick }) {
-  const [activeTab, setActiveTab] = useState("all");
-  const [viewLayout, setViewLayout] = useState("grid");
-
-  const variantIds = product.variantIds?.length
-    ? product.variantIds
-    : [product.id];
-  const { items: productAssets, isLoading } = useMergedContentList(
-    {
-      page: "1",
-      size: "60",
-      sort: "date",
-    },
-    variantIds
-  );
-  const productBriefs = useMemo(
-    () =>
-      briefs.filter((b) => {
-        const name = product.name?.toLowerCase() || "";
-        const bp = b.product?.toLowerCase() || "";
-        return name && bp && (bp.includes(name) || name.includes(bp));
-      }).slice(0, 6),
-    [product]
-  );
-
-  const tabs = [
-    { id: "all", label: "All Assets", count: productAssets.length },
-    { id: "photo", label: "Photography", count: productAssets.filter((a) => a.type === "Photo").length },
-    { id: "video", label: "Video & Motion", count: productAssets.filter((a) => a.type === "Video" || a.type === "Motion").length },
-    { id: "graphic", label: "Graphics", count: productAssets.filter((a) => a.type === "Graphic" || a.type === "Illustration").length },
-    { id: "3d", label: "3D Renders", count: productAssets.filter((a) => a.type === "3D Render").length },
-    { id: "briefs", label: "Briefs", count: productBriefs.length },
-  ];
-
-  const visibleAssets = useMemo(() => {
-    if (activeTab === "all" || activeTab === "briefs") return productAssets;
-    if (activeTab === "photo") return productAssets.filter((a) => a.type === "Photo");
-    if (activeTab === "video") return productAssets.filter((a) => a.type === "Video" || a.type === "Motion");
-    if (activeTab === "graphic") return productAssets.filter((a) => a.type === "Graphic" || a.type === "Illustration");
-    if (activeTab === "3d") return productAssets.filter((a) => a.type === "3D Render");
-    return productAssets;
-  }, [activeTab, productAssets]);
-
-  return (
-    <div className="flex-1 overflow-y-auto" id="discovery-scroll">
-      <div className="fade-in">
-        {/* Hero banner */}
-        <div
-          className="relative h-[340px] overflow-hidden"
-          style={{ background: `radial-gradient(ellipse at 50% 40%, ${product.color}44 0%, #0a0a0c 70%)` }}
-        >
-          <img
-            src={product.thumbnail}
-            alt={product.name}
-            className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 h-[220px] w-[220px] object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.55)]"
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.95) 100%), radial-gradient(ellipse at 30% 50%, ${product.color}18 0%, transparent 60%)`,
-            }}
-          />
-          <div className="absolute inset-0 flex flex-col justify-end p-8">
-            <button
-              onClick={onBack}
-              className="absolute top-6 left-6 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-[12px] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all duration-200 backdrop-blur-sm"
-            >
-              <ArrowLeft size={14} /> Back to Discovery
-            </button>
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="flex items-center gap-3 mb-3">
-                  <span
-                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"
-                    style={{ backgroundColor: `${product.color}cc` }}
-                  >
-                    REVO Product
-                  </span>
-                </div>
-                <h1 className="text-[48px] font-black text-white tracking-tight leading-none">
-                  {product.name}
-                </h1>
-                {product.variants?.length > 0 && (
-                  <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                    <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mr-1">
-                      Variants
-                    </span>
-                    {[product, ...product.variants].map((v) => (
-                      <span
-                        key={v.id}
-                        className="px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-[10px] text-white/70"
-                      >
-                        {v.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[14px] text-white/50 mt-2 max-w-lg leading-relaxed">
-                  {product.description}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatPill icon={Image} label="Assets" value={product.assetCount} color={product.color} />
-                <StatPill icon={FileText} label="Briefs" value={product.briefCount} color={product.color} />
-                <StatPill icon={Users} label="UGC Creators" value={product.ugcCount} color={product.color} />
-                <StatPill icon={BarChart3} label="Reach" value={product.topMetric} color={product.color} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 pt-5 pb-10">
-          {/* Tab bar */}
-          <div className="flex items-center justify-between mb-5 border-b border-white/[0.04] pb-3">
-            <div className="flex items-center gap-1">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? "bg-white/[0.08] text-white border border-white/[0.08]"
-                      : "text-white/30 hover:text-white/55 hover:bg-white/[0.03]"
-                  }`}
-                >
-                  {tab.label}
-                  <span
-                    className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md ${
-                      activeTab === tab.id
-                        ? "bg-white/[0.08] text-white/60"
-                        : "bg-white/[0.03] text-white/15"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1 bg-white/[0.03] border border-white/[0.04] rounded-xl p-0.5">
-              {[
-                { v: "grid", i: Grid2X2 },
-                { v: "list", i: Rows3 },
-              ].map((l) => (
-                <button
-                  key={l.v}
-                  onClick={() => setViewLayout(l.v)}
-                  className={`p-1.5 rounded-lg transition-all duration-200 ${
-                    viewLayout === l.v
-                      ? "bg-white/[0.1] text-white shadow-sm"
-                      : "text-white/25 hover:text-white/45"
-                  }`}
-                >
-                  <l.i size={14} />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Briefs tab content */}
-          {activeTab === "briefs" ? (
-            <div className="grid grid-cols-3 gap-4">
-              {productBriefs.map((brief) => (
-                <div
-                  key={brief.id}
-                  className="glass-card rounded-2xl overflow-hidden card-hover cursor-pointer group"
-                >
-                  <div className="relative h-[140px] overflow-hidden">
-                    <img
-                      src={brief.thumbnail}
-                      alt={brief.title}
-                      className="w-full h-full object-cover img-cinematic transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    <div className="absolute bottom-3 left-3 right-3">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider mb-1.5 ${
-                        brief.priority === "Critical"
-                          ? "bg-red-500/20 text-red-400"
-                          : brief.priority === "High"
-                            ? "bg-orange-500/20 text-orange-400"
-                            : "bg-blue-500/20 text-blue-400"
-                      }`}>
-                        {brief.priority}
-                      </span>
-                      <p className="text-[13px] font-bold text-white leading-tight truncate">
-                        {brief.title}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-white/30">
-                        {brief.deliverableCount} deliverables
-                      </span>
-                      <span className="text-[10px] text-white/30">
-                        Due {brief.dueDate}
-                      </span>
-                    </div>
-                    <div className="w-full h-1 bg-white/[0.04] rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${brief.progress}%`,
-                          backgroundColor: product.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              className={
-                viewLayout === "grid"
-                  ? "grid grid-cols-5 gap-3"
-                  : "space-y-1"
-              }
-            >
-              {visibleAssets.map((asset) => (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  onClick={onAssetClick}
-                  variant={viewLayout === "grid" ? "compact" : "list"}
-                />
-              ))}
-            </div>
-          )}
-
-          {visibleAssets.length === 0 && activeTab !== "briefs" && (
-            <div className="flex flex-col items-center justify-center py-24">
-              <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center mb-4">
-                {isLoading ? (
-                  <Loader2 size={24} className="text-white/20 animate-spin" />
-                ) : (
-                  <Package size={24} strokeWidth={1.2} className="text-white/10" />
-                )}
-              </div>
-              <p className="text-sm text-white/25 font-medium">
-                {isLoading ? "Loading product assets…" : "No assets in this category"}
-              </p>
-              <p className="text-xs text-white/12 mt-1">Try viewing all assets instead</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatPill({ icon: Icon, label, value, color }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.06] backdrop-blur-sm">
-      <Icon size={13} style={{ color }} />
-      <div>
-        <p className="text-[13px] font-bold text-white leading-none">
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </p>
-        <p className="text-[9px] text-white/30 mt-0.5">{label}</p>
-      </div>
-    </div>
   );
 }

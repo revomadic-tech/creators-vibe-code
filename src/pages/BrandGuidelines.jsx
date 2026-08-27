@@ -45,7 +45,7 @@ export default function BrandGuidelines() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
         <div className="px-6 pb-6 pt-24 fade-in">
           {/* Header */}
           <div className="mb-6">

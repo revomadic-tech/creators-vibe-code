@@ -190,7 +190,7 @@ export default function Admin() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
       <div className="px-6 pb-6 pt-20 fade-in">
         <div className="glass-card rounded-2xl border border-white/[0.06] overflow-hidden">
           {/* Controls bar */}

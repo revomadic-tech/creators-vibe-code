@@ -48,7 +48,7 @@ function filterItems(items, tab, viewer) {
 
 export default function Briefs() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { boardItems } = useCommandCenter();
+  const { boardItems, openTask } = useCommandCenter();
   const { user } = useAuth();
   const viewer = useMemo(() => resolveViewer(user), [user]);
   const [viewMode, setViewMode] = useState("card");
@@ -80,10 +80,6 @@ export default function Briefs() {
     [taskParam, boardItems],
   );
 
-  const openFull = (item) => {
-    setSearchParams({ task: String(item.name || "").replace(/^#/, "") });
-  };
-
   const closeFull = () => {
     setSearchParams({});
   };
@@ -111,7 +107,7 @@ export default function Briefs() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
       <div className="px-6 pb-6 pt-16 fade-in">
         {assignedItems.length > 0 && (
           <div className="mb-5 flex items-center justify-between rounded-2xl glass-card px-4 py-2.5">
@@ -194,7 +190,7 @@ export default function Briefs() {
                               <BriefCard
                                 key={item.id}
                                 item={item}
-                                onClick={() => openFull(item)}
+                                onClick={() => openTask(item.id)}
                               />
                             ))}
                           </div>
@@ -224,7 +220,7 @@ export default function Briefs() {
                       <BriefCard
                         key={item.id}
                         item={item}
-                        onClick={() => openFull(item)}
+                        onClick={() => openTask(item.id)}
                         variant="kanban"
                       />
                     ))}
@@ -258,7 +254,7 @@ export default function Briefs() {
               return (
                 <div
                   key={item.id}
-                  onClick={() => openFull(item)}
+                  onClick={() => openTask(item.id)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.015] border border-white/[0.03] hover:bg-white/[0.04] hover:border-white/[0.06] cursor-pointer transition-all duration-200"
                 >
                   <div className="flex-1 min-w-0">
@@ -312,7 +308,7 @@ function TablePill({ label, color }) {
 
 function BriefFullPage({ item, onBack }) {
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
       <div className="px-6 pb-6 pt-16 fade-in">
         <button
           type="button"

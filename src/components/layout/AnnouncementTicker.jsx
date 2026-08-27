@@ -19,7 +19,15 @@ const KIND_ICON = {
   delivery: CheckCircle2,
 };
 
-const KIND_SURFACE = {
+const KIND_SURFACE_LIGHT = {
+  review: "bg-amber-50 text-amber-800 border-amber-200",
+  comment: "bg-sky-50 text-sky-800 border-sky-200",
+  approval: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  assignment: "bg-blue-50 text-blue-800 border-blue-200",
+  delivery: "bg-teal-50 text-teal-800 border-teal-200",
+};
+
+const KIND_SURFACE_DARK = {
   review: "bg-amber-400/22 text-amber-50 border-amber-300/35",
   comment: "bg-blue-400/22 text-blue-50 border-blue-300/35",
   approval: "bg-emerald-400/22 text-emerald-50 border-emerald-300/35",
@@ -35,15 +43,24 @@ function entryKey(entry) {
     : `notif:${entry.notification.id}`;
 }
 
-function TickerChip({ entry, selected, inertClone, onSelect }) {
+function TickerChip({ entry, selected, inertClone, onSelect, tone = "light" }) {
   const isAnn = entry.kind === "announcement";
   const urgent = isAnn && entry.announcement.priority === "urgent";
+  const surfaces = tone === "dark" ? KIND_SURFACE_DARK : KIND_SURFACE_LIGHT;
   const surface = isAnn
     ? urgent
-      ? "bg-rose-400/25 text-rose-50 border-rose-300/40"
-      : "bg-accent-red/20 text-white border-accent-red/35"
-    : KIND_SURFACE[entry.notification.type] ||
-      "bg-white/10 text-white border-white/20";
+      ? tone === "dark"
+        ? "bg-rose-400/25 text-rose-50 border-rose-300/40"
+        : "bg-rose-50 text-rose-800 border-rose-200"
+      : tone === "dark"
+        ? "bg-white/10 text-white border-white/20"
+        : "bg-white text-stone-800 border-stone-200"
+    : surfaces[entry.notification.type] ||
+      (tone === "dark"
+        ? "bg-white/10 text-white border-white/20"
+        : "bg-white text-stone-700 border-stone-200");
+  const ringOffset =
+    tone === "dark" ? "ring-offset-[#161618]" : "ring-offset-[#F9F8F6]";
 
   const Icon = isAnn
     ? urgent
@@ -66,12 +83,14 @@ function TickerChip({ entry, selected, inertClone, onSelect }) {
       }}
       className={`flex items-center gap-1.5 shrink-0 h-7 px-2.5 rounded-full border shadow-sm cursor-pointer text-left max-w-[min(92vw,42rem)] transition-[filter,box-shadow] duration-150 ${surface} ${
         selected
-          ? "ring-2 ring-offset-1 ring-offset-transparent ring-white/35 z-[1]"
-          : "hover:brightness-110"
+          ? `ring-2 ring-offset-1 ${ringOffset} ${tone === "dark" ? "ring-white/35" : "ring-stone-400"} z-[1]`
+          : tone === "dark"
+            ? "hover:brightness-110"
+            : "hover:brightness-[0.98]"
       }`}
     >
       <Icon size={10} className="shrink-0 opacity-85" />
-      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider opacity-80">
+      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider opacity-70">
         {isAnn ? (urgent ? "Urgent" : "Announce") : entry.notification.type}
       </span>
       {isAnn && entry.announcement.pinned && (
@@ -96,7 +115,8 @@ function TickerChip({ entry, selected, inertClone, onSelect }) {
   );
 }
 
-export default function AnnouncementTicker() {
+/** Inline marquee for the paper chrome bars (top Command Center + bottom studio). */
+export default function TickerMarquee({ tone = "light" }) {
   const { open, toggle, selectedTaskId, openTask, findTask } = useCommandCenter();
   const [selectedKey, setSelectedKey] = useState(null);
   const [copies, setCopies] = useState(2);
@@ -118,7 +138,7 @@ export default function AnnouncementTicker() {
       .map((a) => ({ kind: "announcement", announcement: a }));
   }, []);
 
-  pauseRef.current = hoverRef.current || open;
+  pauseRef.current = hoverRef.current;
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -181,83 +201,72 @@ export default function AnnouncementTicker() {
 
   return (
     <div
-      className="absolute top-0 inset-x-0 z-[60] overflow-hidden border-b border-white/[0.08]"
-      style={{ height: "var(--app-ticker-h)" }}
+      className="relative flex min-w-0 flex-1 items-center self-stretch"
       onMouseEnter={() => {
         hoverRef.current = true;
         pauseRef.current = true;
       }}
       onMouseLeave={() => {
         hoverRef.current = false;
-        pauseRef.current = open;
+        pauseRef.current = false;
       }}
     >
-      <div className="absolute inset-0 bg-[#0c0e12]" />
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div
-          className="absolute inset-[-80%] opacity-50"
-          style={{
-            background:
-              "conic-gradient(from 40deg at 50% 50%, #1a1210 0deg, rgba(232,68,46,0.28) 90deg, #0c0e12 180deg, rgba(242,107,58,0.22) 270deg, #1a1210 360deg)",
-            animation: "header-swirl-spin 28s linear infinite",
-          }}
-        />
-      </div>
-      <div className="absolute inset-0 bg-[#0c0e12]/45" />
-      <div className="absolute left-[10px] top-[7px] bottom-[7px] w-[3px] rounded-full opacity-70 bg-gradient-to-b from-amber-400 via-orange-400 to-accent-red" />
-
-      <div className="relative flex items-center h-full pl-6 pr-3">
-        <div
-          ref={viewportRef}
-          className="flex-1 min-w-0 overflow-hidden relative h-7"
-        >
-          {tickerItems.length === 0 ? (
-            <div className="h-full flex items-center px-1 text-[12px] italic text-white/40">
-              You're all caught up
+      <div ref={viewportRef} className="relative h-7 min-w-0 flex-1 overflow-hidden">
+        {tickerItems.length === 0 ? (
+          <div
+            className={`flex h-full items-center px-1 text-[12px] italic ${
+              tone === "dark" ? "text-white/35" : "text-stone-400"
+            }`}
+          >
+            You're all caught up
+          </div>
+        ) : (
+          <>
+            <div ref={trackRef} className="top-header-marquee-track h-full">
+              {Array.from({ length: copies }, (_, dup) => (
+                <div
+                  key={dup}
+                  ref={dup === 0 ? setRef : undefined}
+                  className="top-header-marquee-set"
+                >
+                  {tickerItems.map((entry) => {
+                    const key = entryKey(entry);
+                    const linkedTask =
+                      entry.kind === "notification"
+                        ? findTask(entry.notification.taskRef)
+                        : null;
+                    return (
+                      <TickerChip
+                        key={`${dup}-${key}`}
+                        entry={entry}
+                        tone={tone}
+                        selected={
+                          linkedTask
+                            ? linkedTask.id === selectedTaskId
+                            : selectedKey === key
+                        }
+                        inertClone={dup > 0}
+                        onSelect={activate}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
-          ) : (
-            <>
-              <div ref={trackRef} className="top-header-marquee-track h-full">
-                {Array.from({ length: copies }, (_, dup) => (
-                  <div
-                    key={dup}
-                    ref={dup === 0 ? setRef : undefined}
-                    className="top-header-marquee-set"
-                  >
-                    {tickerItems.map((entry) => {
-                      const key = entryKey(entry);
-                      const linkedTask =
-                        entry.kind === "notification"
-                          ? findTask(entry.notification.taskRef)
-                          : null;
-                      return (
-                        <TickerChip
-                          key={`${dup}-${key}`}
-                          entry={entry}
-                          selected={
-                            linkedTask
-                              ? linkedTask.id === selectedTaskId
-                              : selectedKey === key
-                          }
-                          inertClone={dup > 0}
-                          onSelect={activate}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#0c0e12] to-transparent"
-              />
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#0c0e12] to-transparent"
-              />
-            </>
-          )}
-        </div>
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r to-transparent ${
+                tone === "dark" ? "from-[#161618]" : "from-[#F9F8F6]"
+              }`}
+            />
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l to-transparent ${
+                tone === "dark" ? "from-[#161618]" : "from-[#F9F8F6]"
+              }`}
+            />
+          </>
+        )}
       </div>
     </div>
   );

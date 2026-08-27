@@ -106,6 +106,8 @@ export function mapContentAsset(raw) {
     videoFormat: display.videoFormat || raw.videoFormat || null,
     city: display.city || raw.city || null,
     stage: display.stage || raw.stage || null,
+    assetStatus: display.assetStatus || raw.assetStatus || null,
+    reviewStatus: display.reviewStatus || raw.reviewStatus || null,
     campaignNames: display.campaignNames || [],
     aspectLabel: display.videoFormat
       ? String(display.videoFormat).replace(/^\w/, (c) => c.toUpperCase())

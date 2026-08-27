@@ -53,6 +53,10 @@ export function taskRef(item) {
   return String(item?.name || "").replace(/^#/, "");
 }
 
+export function taskContentTag(item) {
+  return `task:${taskRef(item)}`;
+}
+
 export function briefPath(item) {
   return `/briefs?task=${encodeURIComponent(taskRef(item))}`;
 }

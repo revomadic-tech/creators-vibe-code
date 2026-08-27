@@ -1,10 +1,14 @@
-import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createContent,
+  createContentComment,
   getContentById,
+  getContentComments,
   getContentDiscoveryFeed,
   getContentList,
+  updateContent,
 } from "./index";
-import { unwrapList } from "../../lib/mapContentAsset";
+import { unwrapDetail, unwrapList } from "../../lib/mapContentAsset";
 
 export const useGetContentDiscoveryFeed = () => {
   return useQuery({
@@ -74,6 +78,8 @@ export const useMergedContentList = (payload, productIds) => {
       pages,
       isLoading: multi.some((q) => q.isLoading),
       isFetching: multi.some((q) => q.isFetching),
+      isError: multi.some((q) => q.isError),
+      refetch: () => Promise.all(multi.map((q) => q.refetch())),
     };
   }
 
@@ -82,5 +88,72 @@ export const useMergedContentList = (payload, productIds) => {
     ...list,
     isLoading: single.isLoading,
     isFetching: single.isFetching,
+    isError: single.isError,
+    refetch: single.refetch,
   };
+};
+
+const contentCommentsKey = (id) => ["content-comments", id];
+
+export const useContentComments = (id) =>
+  useQuery({
+    queryKey: id != null && id !== "" ? contentCommentsKey(id) : ["content-comments", "none"],
+    queryFn: async () => {
+      const res = await getContentComments(id);
+      const inner = res?.data?.data;
+      return Array.isArray(inner) ? inner : inner?.data ?? [];
+    },
+    enabled: id != null && id !== "",
+    staleTime: 1000 * 15,
+  });
+
+export const useCreateContentComment = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload) => createContentComment(id, payload),
+    onSuccess: () => {
+      if (id != null && id !== "") {
+        qc.invalidateQueries({ queryKey: contentCommentsKey(id) });
+      }
+    },
+  });
+};
+
+export const useCreateContent = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload) => {
+      const res = await createContent(payload);
+      const mapped = unwrapDetail(res);
+      if (mapped) return mapped;
+      const raw = res?.data?.data ?? res?.data;
+      if (raw?.id == null) return null;
+      return {
+        id: raw.id,
+        title: raw.title || payload.title,
+        thumbnail: raw.thumbnailImage || raw.images?.[0]?.url || "",
+        videoUrl: raw.videos?.[0]?.url || null,
+        type: payload.contentType === "video" ? "Video" : "Photo",
+        status: "Pending Approval",
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["content-list"] });
+      qc.invalidateQueries({ queryKey: ["content-discovery-feed"] });
+    },
+  });
+};
+
+export const useUpdateContent = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }) =>
+      unwrapDetail(await updateContent(id, payload)),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["content-list"] });
+      qc.invalidateQueries({ queryKey: ["content-discovery-feed"] });
+      qc.invalidateQueries({ queryKey: ["content", variables.id] });
+      qc.invalidateQueries({ queryKey: contentCommentsKey(variables.id) });
+    },
+  });
 };

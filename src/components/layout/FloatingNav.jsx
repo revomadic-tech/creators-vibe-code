@@ -18,7 +18,8 @@ import {
 import { currentUser, notifications } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
 import { briefPath, formatTaskDate } from "../../lib/adTaskBrief";
-import { APP_TICKER_H, APP_NAV_H, APP_GUTTER } from "./chrome";
+import { APP_GUTTER, COMMAND_BAR } from "./chrome";
+import TickerMarquee from "./AnnouncementTicker";
 import { useGetContentList } from "../../api/content/hooks";
 import { unwrapList } from "../../lib/mapContentAsset";
 import useDebounce from "../../hooks/useDebounce";
@@ -154,28 +155,24 @@ export default function FloatingNav({ progress = 0, settling = false }) {
       data-command-interactive
       className="fixed z-50"
       style={{
-        top: `calc(${APP_TICKER_H}px + ${progress} * (100dvh - ${APP_NAV_H}px - ${APP_TICKER_H}px))`,
+        top: `calc(${APP_GUTTER}px + ${progress} * (100dvh - ${APP_GUTTER * 2}px))`,
         left: APP_GUTTER,
         right: APP_GUTTER,
-        transition: settling ? `top ${SETTLE_MS}ms ${SETTLE_EASE}` : "none",
+        transform: `translateY(${-progress * 100}%)`,
+        transition: settling
+          ? `top ${SETTLE_MS}ms ${SETTLE_EASE}, transform ${SETTLE_MS}ms ${SETTLE_EASE}`
+          : "none",
       }}
     >
-      <div
-        className="flex items-center justify-between gap-3 w-full min-w-0 px-4 py-1.5 glass-nav shadow-lg shadow-black/30 rounded-xl overflow-hidden"
-        style={{ backgroundColor: "rgba(25, 30, 41, 0.42)" }}
-      >
-        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
+      <div className={COMMAND_BAR}>
+        <div className="flex items-center gap-0.5 shrink-0">
         <button
           type="button"
           data-command-gesture-handle
           onClick={() => toggleCanvas()}
           aria-label={canvasOpen ? "Go down to studio" : "Go up to command center"}
           title={canvasOpen ? "Studio" : "Command Center"}
-          className={`flex flex-col items-center justify-center w-9 h-9 rounded-xl border flex-shrink-0 touch-none cursor-grab active:cursor-grabbing transition-all duration-200 ${
-            canvasOpen
-              ? "bg-white/[0.1] border-white/[0.14] text-white"
-              : "bg-white/[0.06] border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.1]"
-          }`}
+          className="flex flex-col items-center justify-center w-9 h-9 rounded-xl border border-white/15 bg-white/[0.07] text-white/70 hover:text-white hover:bg-white/12 flex-shrink-0 touch-none cursor-grab active:cursor-grabbing transition-all duration-200"
         >
           <ChevronUp
             size={11}
@@ -220,6 +217,8 @@ export default function FloatingNav({ progress = 0, settling = false }) {
         })}
         </div>
 
+        {!docked && <TickerMarquee tone="dark" />}
+
         <div className="flex items-center gap-0.5 flex-shrink-0">
         {!docked && (
           <>
@@ -255,14 +254,14 @@ export default function FloatingNav({ progress = 0, settling = false }) {
             >
               <Bell size={14} />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-accent-red rounded-full pulse-dot" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full pulse-dot" />
               )}
             </button>
 
             <button
               type="button"
               onClick={() => signOut()}
-              className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.08] hover:border-white/[0.18] transition-all duration-200 flex-shrink-0"
+              className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.14] hover:border-white/30 transition-all duration-200 flex-shrink-0"
               title="Sign out"
             >
               <img

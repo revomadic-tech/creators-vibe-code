@@ -3,17 +3,19 @@ import { APP_TICKER_H } from "../components/layout/chrome";
 
 const SETTLE_MS = 280;
 const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const ACTIVATE_PX = 16;
-const AXIS_LOCK_RATIO = 1.35;
-const COMMIT_PROGRESS = 0.32;
-const GESTURE_TRAVEL_PX = 420;
-const WHEEL_SETTLE_MS = 180;
-/** Extra overscroll at an edge before the shell gesture arms. */
-const OVERSCROLL_ARM_PX = 80;
-/** Must rest at the scroll edge before overscroll can arm. */
-const EDGE_READY_IDLE_MS = 180;
-const BOUNCE_MAX_PX = 56;
+const ACTIVATE_PX = 40;
+const AXIS_LOCK_RATIO = 1.6;
+const COMMIT_PROGRESS = 0.45;
+const GESTURE_TRAVEL_PX = 480;
+const WHEEL_SETTLE_MS = 220;
+/** Extra overscroll past the studio top before Command Center arms. */
+const OPEN_ARM_PX = 180;
+/** Extra pull at the Command Center top before close arms. */
+const CLOSE_ARM_PX = 96;
+/** Rest at the scroll edge long enough that trackpad inertia cannot arm the gesture. */
+const EDGE_READY_IDLE_MS = 480;
 const HANDLE = "[data-command-gesture-handle]";
+const PAGE_SCROLL = "[data-shell-page-scroll]";
 const CANVAS_SCROLL = "[data-command-canvas-scroll]";
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -28,39 +30,26 @@ function isScrollable(el) {
   return el.scrollHeight > el.clientHeight + 1;
 }
 
-function chainAtTop(from, boundary) {
-  let node =
-    from instanceof Element
-      ? from
-      : from instanceof Node
-        ? from.parentElement
-        : null;
-  while (node) {
-    if (node instanceof HTMLElement && isScrollable(node) && node.scrollTop > 1) {
-      return false;
-    }
-    if (node === boundary) break;
-    node = node.parentElement;
-  }
-  return true;
+function atTop(el) {
+  return el.scrollTop <= 1;
 }
 
-function chainAtBottom(from, boundary) {
-  let node =
-    from instanceof Element
-      ? from
-      : from instanceof Node
-        ? from.parentElement
-        : null;
-  while (node) {
-    if (node instanceof HTMLElement && isScrollable(node)) {
-      const room = node.scrollHeight - node.clientHeight - node.scrollTop;
-      if (room > 1) return false;
-    }
-    if (node === boundary) break;
-    node = node.parentElement;
-  }
-  return true;
+function atBottom(el) {
+  return el.scrollHeight - el.clientHeight - el.scrollTop <= 1;
+}
+
+/**
+ * Only the page-level scroller gates the shell gesture. Nested lists
+ * (group tables, chat, dropdowns) must not block swipe-up / swipe-down.
+ * Pages with no scroller are already at the edge.
+ */
+function pageScrollerAtEdge(boundary, selector, edge) {
+  if (!boundary) return false;
+  const scrollers = [...boundary.querySelectorAll(selector)].filter(
+    (el) => el instanceof HTMLElement && isScrollable(el),
+  );
+  if (scrollers.length === 0) return true;
+  return scrollers.every(edge);
 }
 
 function ignoreTarget(target) {
@@ -88,23 +77,11 @@ function wheelDeltaToPx(e) {
   return dy;
 }
 
-function canvasScroller(canvas) {
-  if (!canvas) return null;
-  return canvas.querySelector(CANVAS_SCROLL) || canvas;
-}
-
-function rubber(px) {
-  if (!px) return 0;
-  return BOUNCE_MAX_PX * (1 - Math.exp(-Math.abs(px) / 90)) * Math.sign(px);
-}
-
 /**
- * Admin.revo polarity: the studio shell slides DOWN to reveal Command Center
- * behind it. Scroll/swipe up (deltaY < 0) at the page top opens it.
- * On the open canvas, wheel-down scrolls the board; dismissal arms only once
- * the scroll chain is at its bottom (past the scroll floor) or the content
- * cannot scroll. The handles accept either direction so the gesture is
- * always reachable.
+ * Swipe up at the studio top opens Command Center. Swipe down at the
+ * Command Center top (touch) or past the board floor (wheel) returns to
+ * studio. Nested tables do not gate either gesture. A long idle +
+ * overscroll arm keeps trackpad inertia from firing it.
  */
 export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
   const [progress, setProgress] = useState(open ? 1 : 0);
@@ -119,10 +96,8 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
   const wheelTimer = useRef(null);
   const wheelOrigin = useRef(null);
   const overscrollArmRef = useRef(0);
-  const bounceArmRef = useRef(0);
   const edgeReadyRef = useRef(true);
   const edgeReadyTimer = useRef(null);
-  const bounceTimer = useRef(null);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -153,42 +128,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       edgeReadyRef.current = true;
     }, EDGE_READY_IDLE_MS);
   }, [clearEdgeReadyTimer]);
-
-  const writeBounce = useCallback(
-    (y, animate) => {
-      const el = canvasScroller(canvasRef.current);
-      if (!el) return;
-      el.style.transition = animate
-        ? `transform ${SETTLE_MS}ms ${SETTLE_EASE}`
-        : "none";
-      el.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
-      el.style.willChange = y ? "transform" : "";
-    },
-    [canvasRef],
-  );
-
-  const releaseBounce = useCallback(() => {
-    bounceArmRef.current = 0;
-    if (bounceTimer.current) window.clearTimeout(bounceTimer.current);
-    writeBounce(0, true);
-    bounceTimer.current = window.setTimeout(() => {
-      bounceTimer.current = null;
-      writeBounce(0, false);
-    }, SETTLE_MS);
-  }, [writeBounce]);
-
-  const pulseBounce = useCallback(
-    (y) => {
-      writeBounce(y, false);
-      if (bounceTimer.current) window.clearTimeout(bounceTimer.current);
-      bounceTimer.current = window.setTimeout(() => {
-        bounceTimer.current = null;
-        bounceArmRef.current = 0;
-        writeBounce(0, true);
-      }, WHEEL_SETTLE_MS);
-    },
-    [writeBounce],
-  );
 
   const writeClip = useCallback(
     (next, animate) => {
@@ -233,9 +172,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       sessionRef.current = null;
       wheelOrigin.current = null;
       overscrollArmRef.current = 0;
-      bounceArmRef.current = 0;
       edgeReadyRef.current = false;
-      writeBounce(0, false);
       setDragging(false);
       setSettling(true);
       writeShell(target, true);
@@ -248,7 +185,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       }, SETTLE_MS);
       scheduleEdgeReady();
     },
-    [setOpen, writeShell, writeBounce, scheduleEdgeReady],
+    [setOpen, writeShell, scheduleEdgeReady],
   );
 
   const release = useCallback(
@@ -279,7 +216,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         activeRef.current = true;
         wheelOrigin.current = progressRef.current;
         setDragging(true);
-        writeBounce(0, false);
       }
       event.preventDefault();
       setLive(progressRef.current + -deltaY / travel());
@@ -289,7 +225,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         wheelTimer.current = null;
       }, WHEEL_SETTLE_MS);
     },
-    [setLive, release, writeBounce],
+    [setLive, release],
   );
 
   useEffect(() => {
@@ -309,13 +245,15 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         applyWheel(-Math.abs(e.deltaY), e);
         return;
       }
+
+      const pageAtTop = pageScrollerAtEdge(shell, PAGE_SCROLL, atTop);
       if (e.deltaY >= 0) {
         overscrollArmRef.current = 0;
-        if (chainAtTop(e.target, shell)) scheduleEdgeReady();
+        if (pageAtTop) scheduleEdgeReady();
         else invalidateEdgeReady();
         return;
       }
-      if (!chainAtTop(e.target, shell)) {
+      if (!pageAtTop) {
         invalidateEdgeReady();
         return;
       }
@@ -325,7 +263,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         return;
       }
       overscrollArmRef.current += -wheelDeltaToPx(e);
-      if (overscrollArmRef.current < OVERSCROLL_ARM_PX) {
+      if (overscrollArmRef.current < OPEN_ARM_PX) {
         e.preventDefault();
         return;
       }
@@ -335,6 +273,20 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
     shell.addEventListener("wheel", onWheel, { passive: false });
     return () => shell.removeEventListener("wheel", onWheel);
   }, [shellRef, applyWheel, scheduleEdgeReady, invalidateEdgeReady]);
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const onScroll = (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (!t.matches(PAGE_SCROLL) && !isScrollable(t)) return;
+      if (!atTop(t)) invalidateEdgeReady();
+      else if (!edgeReadyRef.current && !activeRef.current) scheduleEdgeReady();
+    };
+    shell.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => shell.removeEventListener("scroll", onScroll, true);
+  }, [shellRef, invalidateEdgeReady, scheduleEdgeReady]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -354,25 +306,15 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         return;
       }
 
-      if (e.deltaY < 0) {
+      const canvasAtBottom = pageScrollerAtEdge(canvas, CANVAS_SCROLL, atBottom);
+      if (e.deltaY <= 0) {
         overscrollArmRef.current = 0;
-        if (chainAtTop(e.target, canvas)) {
-          // Nothing above can consume the wheel — rubber-band cue only.
-          e.preventDefault();
-          bounceArmRef.current += -wheelDeltaToPx(e);
-          pulseBounce(rubber(bounceArmRef.current));
-        } else {
-          bounceArmRef.current = 0;
-        }
-        invalidateEdgeReady();
+        if (canvasAtBottom) scheduleEdgeReady();
+        else invalidateEdgeReady();
         return;
       }
-
-      bounceArmRef.current = 0;
-      if (!chainAtBottom(e.target, canvas)) {
-        // The board can still scroll down — let the wheel move content
-        // natively. Dismissal only arms once the chain is overscrolled
-        // past the scroll floor.
+      // Downward wheel goes to studio, but never by stealing board scroll.
+      if (!canvasAtBottom) {
         invalidateEdgeReady();
         return;
       }
@@ -382,9 +324,8 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         return;
       }
       overscrollArmRef.current += wheelDeltaToPx(e);
-      if (overscrollArmRef.current < OVERSCROLL_ARM_PX) {
+      if (overscrollArmRef.current < CLOSE_ARM_PX) {
         e.preventDefault();
-        pulseBounce(-rubber(overscrollArmRef.current));
         return;
       }
       applyWheel(e.deltaY, e);
@@ -392,14 +333,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
 
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [
-    canvasRef,
-    applyWheel,
-    open,
-    scheduleEdgeReady,
-    invalidateEdgeReady,
-    pulseBounce,
-  ]);
+  }, [canvasRef, applyWheel, open, scheduleEdgeReady, invalidateEdgeReady]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -408,7 +342,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       const t = e.target;
       if (!(t instanceof HTMLElement)) return;
       if (!t.matches(CANVAS_SCROLL) && !isScrollable(t)) return;
-      if (t.scrollTop > 1) invalidateEdgeReady();
+      if (!atBottom(t)) invalidateEdgeReady();
       else if (!edgeReadyRef.current && !activeRef.current) scheduleEdgeReady();
     };
     canvas.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -419,7 +353,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
     () => () => {
       if (settleTimer.current) window.clearTimeout(settleTimer.current);
       if (wheelTimer.current) window.clearTimeout(wheelTimer.current);
-      if (bounceTimer.current) window.clearTimeout(bounceTimer.current);
       clearEdgeReadyTimer();
     },
     [clearEdgeReadyTimer],
@@ -436,7 +369,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       origin: progressRef.current,
       activated: false,
       fromHandle,
-      kind: "undecided",
     };
   }, []);
 
@@ -446,13 +378,6 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       if (!session || session.pointerId !== e.pointerId) return;
       const dy = e.clientY - session.startY;
       const dx = e.clientX - session.startX;
-      const canvas = canvasRef.current;
-      const shell = shellRef.current;
-
-      if (session.kind === "bounce") {
-        writeBounce(-rubber(Math.max(0, -dy)), false);
-        return;
-      }
 
       if (!session.activated) {
         if (Math.abs(dy) < ACTIVATE_PX && Math.abs(dx) < ACTIVATE_PX) return;
@@ -462,36 +387,28 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         }
 
         if (!session.fromHandle) {
-          if (openRef.current) {
-            if (dy < 0) {
-              if (canvas && chainAtBottom(e.target, canvas)) {
-                session.kind = "bounce";
-                writeBounce(-rubber(-dy), false);
-                return;
-              }
-              sessionRef.current = null;
-              return;
-            }
-            if (canvas && !chainAtTop(e.target, canvas)) {
-              sessionRef.current = null;
-              return;
-            }
-            if (dy < OVERSCROLL_ARM_PX) {
-              writeBounce(rubber(dy), false);
-              return;
-            }
-          } else if (dy > 0 || (shell && !chainAtTop(e.target, shell))) {
+          const opening = dy < 0;
+          if (opening && openRef.current) {
             sessionRef.current = null;
             return;
-          } else if (-dy < OVERSCROLL_ARM_PX) {
+          }
+          if (!opening && !openRef.current) {
+            sessionRef.current = null;
             return;
           }
+          const ok = opening
+            ? pageScrollerAtEdge(shellRef.current, PAGE_SCROLL, atTop)
+            : pageScrollerAtEdge(canvasRef.current, CANVAS_SCROLL, atTop);
+          if (!ok) {
+            sessionRef.current = null;
+            return;
+          }
+          if (opening && -dy < OPEN_ARM_PX) return;
+          if (!opening && dy < CLOSE_ARM_PX) return;
         }
 
         session.activated = true;
-        session.kind = "gesture";
         activeRef.current = true;
-        writeBounce(0, false);
         setDragging(true);
         try {
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -506,22 +423,21 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
       }
       setLive(session.origin + -dy / travel());
     },
-    [setLive, canvasRef, shellRef, writeBounce],
+    [setLive, canvasRef, shellRef],
   );
 
   const end = useCallback(
     (e) => {
       const session = sessionRef.current;
       if (!session || session.pointerId !== e.pointerId) return;
-      if (session.kind === "bounce" || !session.activated) {
+      if (!session.activated) {
         sessionRef.current = null;
         overscrollArmRef.current = 0;
-        releaseBounce();
         return;
       }
       release(session.origin);
     },
-    [release, releaseBounce],
+    [release],
   );
 
   const p = clamp01(progress);
@@ -536,7 +452,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         transformOrigin: "top center",
         willChange: "transform",
         pointerEvents: p > 0.98 ? "none" : undefined,
-        backgroundColor: canvasMounted ? "#050506" : undefined,
+        backgroundColor: canvasMounted ? "rgba(22, 22, 24, 0.88)" : undefined,
       }
     : {
         transform: `translate3d(0, ${y}px, 0) scale(${1 - p * 0.015})`,
@@ -546,7 +462,7 @@ export function useCommandCenterGesture(open, setOpen, shellRef, canvasRef) {
         borderTopRightRadius: p * 24,
         boxShadow: p > 0.02 ? "0 -24px 60px -16px rgba(0,0,0,0.45)" : "none",
         pointerEvents: p > 0.98 ? "none" : undefined,
-        backgroundColor: canvasMounted ? "#050506" : undefined,
+        backgroundColor: canvasMounted ? "rgba(22, 22, 24, 0.88)" : undefined,
       };
 
   const canvasStyle = live
