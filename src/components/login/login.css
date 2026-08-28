@@ -1,0 +1,329 @@
+/* ── Login stage (Nodal atrium composition) ── */
+.login-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  overflow: hidden;
+  color: #f0efe9;
+}
+
+.login-crown {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: max(1.25rem, env(safe-area-inset-top)) 2.5rem 0;
+}
+
+.login-wordmark {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(240, 239, 233, 0.72);
+}
+.login-wordmark span {
+  color: var(--color-accent-red);
+}
+
+.login-clock {
+  text-align: right;
+  opacity: 0.45;
+}
+.login-clock-time {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #f0efe9;
+}
+.login-clock-date {
+  margin: 0.4rem 0 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(240, 239, 233, 0.7);
+}
+
+.login-lead {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: auto;
+  padding: 0 2.5rem max(2.5rem, env(safe-area-inset-bottom));
+  max-width: min(100%, 42rem);
+}
+
+.login-greeting {
+  margin: 0;
+  font-size: clamp(2.1rem, 5.4vw, 4.4rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  color: #f0efe9;
+  text-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.login-statement {
+  margin: 0 0 0.35rem;
+  font-size: clamp(0.95rem, 1.5vw, 1.3rem);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(240, 239, 233, 0.55);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  animation: loginFadeIn 0.45s ease-out both;
+}
+
+.login-orb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  min-width: 220px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 10, 0.5);
+  backdrop-filter: blur(20px) saturate(1.3);
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+.login-orb:focus-within,
+.login-orb--filled {
+  border-color: rgba(232, 68, 46, 0.45);
+  background: rgba(10, 10, 10, 0.72);
+  box-shadow: 0 0 0 1px rgba(232, 68, 46, 0.12);
+}
+.login-orb-icon {
+  display: flex;
+  color: rgba(240, 239, 233, 0.4);
+  flex-shrink: 0;
+}
+.login-orb:focus-within .login-orb-icon,
+.login-orb--filled .login-orb-icon {
+  color: rgba(232, 68, 46, 0.85);
+}
+.login-orb-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #f0efe9;
+  font-size: 13px;
+  padding: 0 10px;
+}
+.login-orb-input::placeholder {
+  color: rgba(240, 239, 233, 0.28);
+}
+.login-orb-reveal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: rgba(240, 239, 233, 0.35);
+  border-radius: 999px;
+}
+.login-orb-reveal:hover {
+  color: rgba(240, 239, 233, 0.7);
+}
+.login-orb-go {
+  min-width: 44px;
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+  border-color: rgba(232, 68, 46, 0.55);
+  background: rgba(232, 68, 46, 0.9);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(232, 68, 46, 0.25);
+}
+.login-orb-go:hover:not(:disabled) {
+  background: #e8442e;
+}
+.login-orb-go:disabled {
+  opacity: 0.7;
+}
+
+.login-live {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  padding: 4.5rem 1.5rem 9.5rem;
+}
+.login-live-frame {
+  position: relative;
+  height: 100%;
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%),
+    rgba(8, 8, 10, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 40px 80px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+.login-live-interior {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 70% 20%, rgba(232, 68, 46, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 45% at 20% 80%, rgba(20, 184, 166, 0.05) 0%, transparent 50%);
+}
+.login-live-caption {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.15rem;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(240, 239, 233, 0.28);
+}
+
+.login-presence-card {
+  position: absolute;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  border-radius: 1.15rem;
+  overflow: hidden;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  animation: loginPresenceIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.login-presence-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+  filter: contrast(1.04) saturate(1.08);
+}
+.login-presence-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.92);
+  filter: none;
+}
+.login-presence-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.12) 45%, transparent 100%);
+}
+.login-presence-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.75rem 0.85rem 0.85rem;
+}
+.login-presence-role {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(240, 239, 233, 0.5);
+}
+.login-presence-name {
+  margin: 0.1rem 0 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #fff;
+}
+.login-presence-activity {
+  margin: 0.35rem 0 0;
+  font-size: 10px;
+  color: rgba(240, 239, 233, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.login-presence-dot {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
+}
+.login-presence-dot--online {
+  background: var(--color-accent-teal);
+  animation: loginPulse 2s ease-in-out infinite;
+}
+.login-presence-dot--away {
+  background: #eab308;
+}
+
+@keyframes loginPresenceIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loginPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@media (max-width: 900px) {
+  .login-crown,
+  .login-lead {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  .login-live {
+    padding: 4.25rem 1rem 11rem;
+  }
+  .login-presence-card {
+    width: 132px !important;
+  }
+  .login-orb {
+    min-width: 180px;
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-presence-card,
+  .login-statement,
+  .login-orb-go .animate-spin {
+    animation: none !important;
+  }
+  .login-presence-dot--online {
+    animation: none;
+  }
+}
