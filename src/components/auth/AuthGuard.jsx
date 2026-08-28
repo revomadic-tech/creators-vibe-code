@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
+import { useAccountType } from "../../hooks/useAccountType";
 
 const RETURN_KEY = "revo:returnTo";
 
@@ -13,6 +14,12 @@ export function AuthGuard({ children }) {
     return <Navigate to="/login" replace />;
   }
 
+  return children;
+}
+
+export function ManagerGuard({ children }) {
+  const { isManager } = useAccountType();
+  if (!isManager) return <Navigate to="/" replace />;
   return children;
 }
 

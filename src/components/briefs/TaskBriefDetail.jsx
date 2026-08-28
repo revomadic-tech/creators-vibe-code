@@ -244,7 +244,9 @@ export default function TaskBriefDetail({
 }) {
   const [draft, setDraft] = useState("");
   const [notes, setNotes] = useState([]);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(
+    item?.sampleSimulation ? "submissions" : "details",
+  );
   const [reviewAsset, setReviewAsset] = useState(null);
   const [summaryDraft, setSummaryDraft] = useState(item?.summary || "");
   const page = density === "page";
@@ -261,8 +263,12 @@ export default function TaskBriefDetail({
 
   useEffect(() => {
     setSummaryDraft(item?.summary || "");
-    setReviewAsset(null);
   }, [item?.id, item?.summary]);
+
+  useEffect(() => {
+    setReviewAsset(null);
+    setActiveTab(item?.sampleSimulation ? "submissions" : "details");
+  }, [item?.id, item?.sampleSimulation]);
 
   if (!item) return null;
 
@@ -459,6 +465,9 @@ export default function TaskBriefDetail({
             asset={reviewAsset}
             taskItem={item}
             onBack={() => setReviewAsset(null)}
+            onUpdated={(next) => {
+              if (next) setReviewAsset(next);
+            }}
           />
         ) : (
           <div className={`space-y-4 ${page ? "p-6" : "p-4 sm:p-5"}`}>

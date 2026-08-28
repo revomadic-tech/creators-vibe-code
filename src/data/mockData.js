@@ -7,6 +7,7 @@ export const currentUser = {
   id: 0,
   name: "Kai Montero",
   role: "Senior Creative Director",
+  accountType: "Manager",
   avatar: FACE(12),
   workspace: "REVO Studios",
   email: "kai@revostudios.com",

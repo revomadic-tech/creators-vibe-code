@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Copy, Maximize2, X } from "lucide-react";
-import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import { Copy, X } from "lucide-react";
 import { taskRef } from "../../lib/adTaskBrief";
 import { APP_GUTTER, APP_NAV_H, APP_TICKER_H } from "./chrome";
 import TaskBriefDetail from "../briefs/TaskBriefDetail";
@@ -30,8 +28,7 @@ export default function TaskWidget({ item, onClose }) {
   const [width, setWidth] = useState(loadWidth);
   const dragRef = useRef(null);
   const widthRef = useRef(width);
-  const navigate = useNavigate();
-  const { setOpen } = useCommandCenter();
+  const widgetRef = useRef(null);
 
   useEffect(() => {
     widthRef.current = width;
@@ -52,6 +49,16 @@ export default function TaskWidget({ item, onClose }) {
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown, item]);
+
+  useEffect(() => {
+    if (!item) return undefined;
+    const onPointerDown = (event) => {
+      if (widgetRef.current?.contains(event.target)) return;
+      onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [item, onClose]);
 
   useEffect(() => {
     const onResize = () => setWidth((w) => clampWidth(w));
@@ -106,18 +113,9 @@ export default function TaskWidget({ item, onClose }) {
     }
   };
 
-  const openFullBrief = () => {
-    onClose();
-    setOpen(false);
-    navigate({
-      pathname: "/briefs",
-      search: `?task=${encodeURIComponent(taskRef(item))}`,
-      hash: "",
-    });
-  };
-
   return (
     <div
+      ref={widgetRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="task-widget-title"
@@ -178,24 +176,14 @@ export default function TaskWidget({ item, onClose }) {
           <Copy size={12} />
           {copied ? "Copied" : "Copy link"}
         </button>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={openFullBrief}
-            className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:border-stone-400 hover:bg-stone-100"
-          >
-            <Maximize2 size={12} />
-            Open full brief
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100"
-          >
-            <X size={12} />
-            Close
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100"
+        >
+          <X size={12} />
+          Close
+        </button>
       </footer>
     </div>
   );

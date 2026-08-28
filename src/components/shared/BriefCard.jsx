@@ -115,9 +115,11 @@ function KanbanCard({ item, onClick }) {
   const due = formatTaskDate(item.dueDate);
   const overdue = isTaskOverdue(item);
   return (
-    <div
+    <button
+      type="button"
+      data-command-interactive
       onClick={onClick}
-      className="rounded-2xl glass-card card-hover cursor-pointer p-3"
+      className="rounded-2xl glass-card card-hover cursor-pointer p-3 text-left w-full"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="text-xs font-bold text-white truncate">
@@ -142,7 +144,7 @@ function KanbanCard({ item, onClick }) {
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 

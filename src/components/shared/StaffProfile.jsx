@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Clock, Mail, MapPin, Settings } from "lucide-react";
+import { Check, Clock, LogOut, Mail, MapPin, Settings } from "lucide-react";
 import { currentUser } from "../../data/mockData";
+import useAuth from "../../hooks/useAuth";
+import { useLogout } from "../../api/auth/hooks";
+import {
+  ACCOUNT_TYPES,
+  resolveAccountType,
+  subscribeAccountType,
+  writeAccountTypeOverride,
+} from "../../lib/accountType";
 import {
   myTimeTracking,
   timeOffBalance,
@@ -141,6 +149,22 @@ function WeekHours() {
   );
 }
 
+function profileFromAuth(user) {
+  const name =
+    user?.name ||
+    user?.fullName ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    currentUser.name;
+  return {
+    name,
+    email: user?.email || currentUser.email,
+    avatar: user?.avatar || user?.image || currentUser.avatar,
+    role: user?.role || user?.title || "",
+    workspace: user?.workspace || currentUser.workspace,
+    timezone: user?.timezone || currentUser.timezone,
+  };
+}
+
 function menuPosition(anchor, width) {
   if (!anchor) return { top: 12, left: 12 };
   const r = anchor.getBoundingClientRect();
@@ -155,6 +179,10 @@ export default function StaffProfile({ variant = "rail" }) {
   const btnRef = useRef(null);
   const [panel, setPanel] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 12, left: 12 });
+  const { user } = useAuth();
+  const { mutate: signOut, isPending: signingOut } = useLogout();
+  const profile = profileFromAuth(user);
+  const [accountType, setAccountType] = useState(() => resolveAccountType(user));
   const [clockedIn, setClockedIn] = useState(true);
   const [requests, setRequests] = useState(seedRequests);
   const [ptoType, setPtoType] = useState("Vacation");
@@ -167,6 +195,12 @@ export default function StaffProfile({ variant = "rail" }) {
     digest: true,
     timeReminders: false,
   });
+
+  useEffect(() => {
+    const sync = () => setAccountType(resolveAccountType(user));
+    sync();
+    return subscribeAccountType(sync);
+  }, [user]);
 
   const usedPto = Object.values(timeOffBalance).reduce((n, b) => n + b.used, 0);
   const totalPto = Object.values(timeOffBalance).reduce((n, b) => n + b.total, 0);
@@ -239,13 +273,15 @@ export default function StaffProfile({ variant = "rail" }) {
             <div className={`${MENU_SHELL} w-[340px]`} style={menuPos}>
               <div className="px-4 py-3.5 border-b border-stone-200/80 flex items-center gap-3">
                 <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
+                  src={profile.avatar}
+                  alt={profile.name}
                   className="w-11 h-11 rounded-full object-cover border border-stone-200"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-stone-900 truncate">{currentUser.name}</p>
-                  <p className="text-[11px] text-stone-500 truncate">{currentUser.role}</p>
+                  <p className="text-[13px] font-semibold text-stone-900 truncate">{profile.name}</p>
+                  <p className="text-[11px] text-stone-500 truncate">
+                    {accountType}{profile.role ? ` · ${profile.role}` : ""}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -259,13 +295,13 @@ export default function StaffProfile({ variant = "rail" }) {
               <dl className="px-4 py-2.5 space-y-2.5">
                 <div className="flex items-center gap-2.5 text-[12px] text-stone-700">
                   <Mail size={13} className="text-stone-400 flex-shrink-0" />
-                  <span className="truncate">{currentUser.email}</span>
+                  <span className="truncate">{profile.email}</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-[12px] text-stone-700">
                   <MapPin size={13} className="text-stone-400 flex-shrink-0" />
                   <span>
-                    {currentUser.workspace}
-                    {currentUser.timezone ? ` · ${currentUser.timezone}` : ""}
+                    {profile.workspace}
+                    {profile.timezone ? ` · ${profile.timezone}` : ""}
                   </span>
                 </div>
                 <div className="flex items-center gap-2.5 text-[12px] text-stone-700">
@@ -283,13 +319,24 @@ export default function StaffProfile({ variant = "rail" }) {
                 <p className="text-[10px] text-stone-400">
                   {usedPto} of {totalPto} PTO days used
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setPanel("timeoff")}
-                  className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
-                >
-                  Request time off
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPanel("timeoff")}
+                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                  >
+                    Request time off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => signOut()}
+                    disabled={signingOut}
+                    className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    <LogOut size={11} />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -415,6 +462,36 @@ export default function StaffProfile({ variant = "rail" }) {
                 <p className="text-[11px] text-stone-400 mt-0.5">Staff preferences for this workspace.</p>
               </div>
               <div className="px-4 py-3 space-y-2 border-b border-stone-200/80">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-stone-400">
+                  Account type
+                </p>
+                <div className="flex flex-wrap gap-1 rounded-xl border border-stone-200 bg-white p-1">
+                  {ACCOUNT_TYPES.map((type) => {
+                    const selected = accountType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setAccountType(type);
+                          writeAccountTypeOverride(type);
+                        }}
+                        className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                          selected
+                            ? "bg-stone-900 text-white"
+                            : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-stone-400">
+                  Manager sees Admin and Review Pipeline decisions. Member is the default account type.
+                </p>
+              </div>
+              <div className="px-4 py-3 space-y-2 border-b border-stone-200/80">
                 <TimeStats />
                 <TrackingBar clockedIn={clockedIn} onToggle={() => setClockedIn((v) => !v)} />
               </div>
@@ -448,8 +525,19 @@ export default function StaffProfile({ variant = "rail" }) {
                   </button>
                 ))}
               </div>
-              <div className="px-4 py-3 border-t border-stone-200/80 text-[11px] text-stone-400">
-                Workspace <span className="text-stone-700 font-medium">{currentUser.workspace}</span>
+              <div className="px-4 py-3 border-t border-stone-200/80 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-stone-400">
+                  Workspace <span className="text-stone-700 font-medium">{profile.workspace}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  disabled={signingOut}
+                  className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                >
+                  <LogOut size={12} />
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </button>
               </div>
             </div>
           )}
@@ -465,8 +553,8 @@ export default function StaffProfile({ variant = "rail" }) {
         type="button"
         onClick={() => togglePanel("profile")}
         aria-expanded={panel === "profile"}
-        aria-label={`${currentUser.name} profile`}
-        title={currentUser.name}
+        aria-label={`${profile.name} profile`}
+        title={profile.name}
         className={
           rail
             ? `relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
@@ -478,7 +566,7 @@ export default function StaffProfile({ variant = "rail" }) {
         }
       >
         <img
-          src={currentUser.avatar}
+          src={profile.avatar}
           alt=""
           className={
             rail

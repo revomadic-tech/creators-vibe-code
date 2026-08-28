@@ -22,6 +22,7 @@ import { Tag } from "../components/ui/Tag";
 import { useGetGalleries } from "../api/content-gallery/hooks";
 import { useGetContentList } from "../api/content/hooks";
 import { unwrapGalleries, unwrapList } from "../lib/mapContentAsset";
+import { APP_CONTENT_INSET } from "../components/layout/chrome";
 
 const layoutOptions = [
   { value: "grid", icon: LayoutGrid },
@@ -81,7 +82,7 @@ export default function Galleries() {
   return (
     <>
       <div className="flex-1 overflow-y-auto" data-shell-page-scroll>
-        <div className="px-6 pb-6 pt-16 fade-in">
+        <div className="px-6 pb-6 fade-in" style={{ paddingTop: APP_CONTENT_INSET }}>
           {/* Header */}
           <div className="flex items-end justify-between mb-6">
             <div>

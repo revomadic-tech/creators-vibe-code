@@ -1,4 +1,5 @@
 import { Children, useEffect, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import {
   ArrowLeft,
   AtSign,
@@ -13,6 +14,7 @@ import {
   PenSquare,
   Search,
   Send,
+  Settings,
   Smile,
   User,
   Users,
@@ -21,6 +23,7 @@ import {
 import { currentUser, notifications, teamMembers } from "../../data/mockData";
 import { teamChatSeed } from "../../data/teamChat";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import { useAccountType } from "../../hooks/useAccountType";
 import StaffProfile from "./StaffProfile";
 
 const GOLD = "#E8C4A0";
@@ -910,6 +913,37 @@ function UnreadBadge({ count, className = "" }) {
   );
 }
 
+const RAIL_ICON =
+  "relative flex h-9 w-9 items-center justify-center rounded-xl text-[#E8C4A0] hover:bg-white/10";
+
+function railNavClass({ isActive }) {
+  return `${RAIL_ICON} ${isActive ? "bg-white/10 text-white" : ""}`;
+}
+
+function AccountRailLinks({ compact }) {
+  const { isManager } = useAccountType();
+  const icon = compact ? 16 : 15;
+  const className = compact
+    ? railNavClass
+    : ({ isActive }) =>
+        `shrink-0 w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#E8C4A0]/15 ${
+          isActive ? "text-[#E8C4A0] bg-[#E8C4A0]/15" : "text-[#E8C4A0]/70 hover:text-[#E8C4A0]"
+        }`;
+
+  return (
+    <>
+      <NavLink to="/settings" className={className} title="Settings" aria-label="Settings">
+        <Settings size={icon} />
+      </NavLink>
+      {isManager ? (
+        <NavLink to="/admin" className={className} title="Admin" aria-label="Admin">
+          <Users size={icon} />
+        </NavLink>
+      ) : null}
+    </>
+  );
+}
+
 function CollapsedRail({
   conversations,
   activity,
@@ -931,6 +965,7 @@ function CollapsedRail({
         style={{ background: "transparent", borderColor: GOLD_LINE }}
       >
         <StaffProfile variant="rail" />
+        <AccountRailLinks compact />
         <button
           type="button"
           onClick={onOpenNotifications}
@@ -1196,6 +1231,7 @@ export default function TeamChat({ collapsed, onCollapsedChange }) {
           />
         </div>
         <StaffProfile variant="header" />
+        <AccountRailLinks />
         <button
           type="button"
           onClick={() => setShowNotifications((v) => !v)}

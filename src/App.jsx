@@ -5,8 +5,9 @@ import Briefs from "./pages/Briefs";
 import Galleries from "./pages/Galleries";
 import BrandGuidelines from "./pages/BrandGuidelines";
 import Admin from "./pages/Admin";
+import Settings from "./pages/Settings";
 import Login from "./pages/Login";
-import { AuthGuard, GuestGuard } from "./components/auth/AuthGuard";
+import { AuthGuard, GuestGuard, ManagerGuard } from "./components/auth/AuthGuard";
 
 function RedirectDiscovery() {
   const { search } = useLocation();
@@ -37,7 +38,15 @@ export default function App() {
           <Route path="briefs" element={<Briefs />} />
           <Route path="galleries" element={<Galleries />} />
           <Route path="brand" element={<BrandGuidelines />} />
-          <Route path="admin" element={<Admin />} />
+          <Route path="settings" element={<Settings />} />
+          <Route
+            path="admin"
+            element={
+              <ManagerGuard>
+                <Admin />
+              </ManagerGuard>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

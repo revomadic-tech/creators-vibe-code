@@ -44,17 +44,7 @@ ApiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return ApiClient(originalRequest);
       } catch (refreshError) {
-        const refreshStatus = refreshError?.response?.status;
-        const sessionDead = refreshStatus === 401 || refreshStatus === 403;
-        // Proxy/DNS/5xx failures must not wipe the session — Discovery
-        // would empty out and dump the user on /login.
-        if (sessionDead) {
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("user");
-          if (!window.location.pathname.startsWith("/login")) {
-            window.location.assign("/login");
-          }
-        }
+        // Keep the session. Sign-out is only from the Sign out button.
         return Promise.reject(refreshError);
       }
     }

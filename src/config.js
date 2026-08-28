@@ -29,5 +29,7 @@ export const ADMIN_APP_URL = "https://admin.revomadic.com";
 export const adminDiscoveryUrl = (id) =>
   `${ADMIN_APP_URL}/admin/content/discovery?id=${id}`;
 
+export const adminReviewPipelineUrl = `${ADMIN_APP_URL}/admin/content/review-pipeline`;
+
 export const adminBriefUrl = (id) =>
   `${ADMIN_APP_URL}/admin/campaigns/brief/${encodeURIComponent(id)}`;

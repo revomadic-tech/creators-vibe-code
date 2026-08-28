@@ -70,7 +70,7 @@ export function resolveViewer(authUser) {
     authUser?.name ||
     authUser?.fullName ||
     [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ");
-  if (name) return findWorkspaceUser(name) || { ...currentUser, name };
+  if (name) return findWorkspaceUser(name) || currentUser;
   return currentUser;
 }
 

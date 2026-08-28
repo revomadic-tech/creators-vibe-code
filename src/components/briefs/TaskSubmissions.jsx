@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Loader2,
@@ -17,6 +17,10 @@ import {
   uploadFilesToLibrary,
 } from "../../lib/taskContent";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import {
+  getSamplePipelineAsset,
+  subscribeSamplePipeline,
+} from "../../lib/reviewPipelineSample";
 
 function submissionStatus(asset) {
   const raw = asset.assetStatus || asset.reviewStatus || "";
@@ -26,12 +30,16 @@ function submissionStatus(asset) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function SubmissionCard({ asset, onOpen }) {
+function SubmissionCard({ asset, onOpen, sample }) {
   const video = Boolean(asset.videoUrl) || asset.type === "Video" || asset.type === "Motion";
   return (
     <button
       type="button"
-      onClick={() => onOpen(asset)}
+      data-command-interactive
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen?.(asset);
+      }}
       className="group overflow-hidden rounded-2xl border border-stone-200/80 bg-white text-left shadow-sm shadow-stone-900/[0.03] transition-colors hover:border-stone-300"
     >
       <div className="relative aspect-[4/5] bg-stone-100">
@@ -53,11 +61,18 @@ function SubmissionCard({ asset, onOpen }) {
             {submissionStatus(asset) ? ` · ${submissionStatus(asset)}` : ""}
           </p>
         </div>
-        {video ? (
-          <span className="absolute right-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
-            Video
-          </span>
-        ) : null}
+        <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
+          {sample ? (
+            <span className="rounded-md bg-violet-600/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
+              Sample
+            </span>
+          ) : null}
+          {video ? (
+            <span className="rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
+              Video
+            </span>
+          ) : null}
+        </div>
       </div>
     </button>
   );
@@ -71,13 +86,18 @@ export default function TaskSubmissions({ item, page = false, onOpenAsset }) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [localAssets, setLocalAssets] = useState([]);
+  const [sampleTick, setSampleTick] = useState(0);
 
   const tag = taskContentTag(item);
-  const storedIds = Array.isArray(item.contentIds) ? item.contentIds : [];
+  const storedIds = item.sampleSimulation
+    ? []
+    : Array.isArray(item.contentIds)
+      ? item.contentIds
+      : [];
 
   const taggedQuery = useGetContentList(
     { page: "1", size: "48", tag, sort: "date" },
-    { enabled: Boolean(tag) },
+    { enabled: Boolean(tag) && !item.sampleSimulation },
   );
   const idsQuery = useGetContentList(
     {
@@ -88,19 +108,25 @@ export default function TaskSubmissions({ item, page = false, onOpenAsset }) {
     { enabled: storedIds.length > 0 },
   );
 
+  useEffect(() => {
+    if (!item.sampleSimulation) return undefined;
+    return subscribeSamplePipeline(() => setSampleTick((n) => n + 1));
+  }, [item.sampleSimulation, item.id]);
+
   const assets = useMemo(() => {
     const tagged = unwrapList(taggedQuery.data).items;
     const byId = unwrapList(idsQuery.data).items;
+    const sampleAsset = item.sampleSimulation ? getSamplePipelineAsset(item) : null;
     const merged = [];
     const seen = new Set();
-    for (const row of [...localAssets, ...tagged, ...byId]) {
+    for (const row of [sampleAsset, ...localAssets, ...tagged, ...byId].filter(Boolean)) {
       const key = String(row.id);
       if (seen.has(key)) continue;
       seen.add(key);
       merged.push(row);
     }
     return merged;
-  }, [localAssets, taggedQuery.data, idsQuery.data]);
+  }, [localAssets, taggedQuery.data, idsQuery.data, item, sampleTick]);
 
   const approvedCount = assets.filter((a) =>
     /approved|complete|posted/i.test(String(a.assetStatus || "")),
@@ -174,7 +200,9 @@ export default function TaskSubmissions({ item, page = false, onOpenAsset }) {
               Submissions
             </p>
             <p className="mt-0.5 text-[12px] text-stone-500">
-              Uploads become Content cards. Open one to review, approve, or leave revisions.
+              {item.sampleSimulation
+                ? "Sample Review Pipeline card — chat and revision history live here. Manager actions stay on this task."
+                : "Uploads become Content cards. Managers can review, Send to Editor, or leave revisions."}
             </p>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-stone-500">
@@ -253,7 +281,12 @@ export default function TaskSubmissions({ item, page = false, onOpenAsset }) {
       ) : (
         <div className={`grid gap-3 ${page ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2"}`}>
           {assets.map((asset) => (
-            <SubmissionCard key={asset.id} asset={asset} onOpen={onOpenAsset} />
+            <SubmissionCard
+              key={asset.id}
+              asset={asset}
+              sample={Boolean(asset.sampleSimulation)}
+              onOpen={onOpenAsset}
+            />
           ))}
         </div>
       )}

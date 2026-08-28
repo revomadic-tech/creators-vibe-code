@@ -73,6 +73,9 @@ export function mapContentAsset(raw) {
     "";
   const editorUser = raw.editorUser || raw.editor || null;
   const size = display.size || raw.fileSize || "";
+  const assetStatus = display.assetStatus || raw.assetStatus || null;
+  const reviewStatus = display.reviewStatus || raw.reviewStatus || null;
+  const stage = display.stage || raw.stage || null;
 
   return {
     id,
@@ -86,11 +89,11 @@ export function mapContentAsset(raw) {
     productIds,
     productNames: display.productNames || [],
     partner,
-    status: humanStatus(display.stage || display.assetStatus || raw.stage || raw.assetStatus),
-    editor: editorUser?.name || "",
+    status: humanStatus(stage || assetStatus),
+    editor: editorUser?.name || (Array.isArray(raw.editor) ? raw.editor.filter(Boolean).join(", ") : ""),
     editorId: editorUser?.id || raw.editorId || null,
     editorAvatar: editorUser?.avatar || "",
-    editorNeeded: false,
+    editorNeeded: assetStatus === "ready_for_editors",
     dateSubmitted: formatDate(date),
     isNew: isRecent(date),
     isFeatured: Boolean(display.featured || raw.featured || raw.horizontalFeatured || raw.verticalFeatured),
@@ -105,9 +108,9 @@ export function mapContentAsset(raw) {
     contentType: display.contentType || raw.contentType || null,
     videoFormat: display.videoFormat || raw.videoFormat || null,
     city: display.city || raw.city || null,
-    stage: display.stage || raw.stage || null,
-    assetStatus: display.assetStatus || raw.assetStatus || null,
-    reviewStatus: display.reviewStatus || raw.reviewStatus || null,
+    stage,
+    assetStatus,
+    reviewStatus,
     campaignNames: display.campaignNames || [],
     aspectLabel: display.videoFormat
       ? String(display.videoFormat).replace(/^\w/, (c) => c.toUpperCase())

@@ -2,6 +2,8 @@ export const APP_TICKER_H = 0;
 export const APP_NAV_H = 52;
 export const APP_GUTTER = 12;
 export const APP_RADIUS = 16;
+/** Shared top inset so Team Chat and studio pages line up under the nav. */
+export const APP_CONTENT_INSET = APP_GUTTER + APP_NAV_H + 16;
 
 export const PAPER_BAR =
   "flex items-center gap-2 w-full min-w-0 px-3 py-1.5 overflow-hidden rounded-2xl border border-stone-200 bg-[#F9F8F6] text-stone-800 shadow-2xl";

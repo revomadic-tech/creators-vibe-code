@@ -14,6 +14,7 @@ import {
   persistBoardItems,
   updateBoardTask,
 } from "../../data/adProduction";
+import { APP_CONTENT_INSET } from "./chrome";
 
 export default function AppShell() {
   const [open, setOpen] = useState(false);
@@ -106,7 +107,10 @@ export default function AppShell() {
           {gesture.canvasMounted && (
             <CommandCenterNav progress={gesture.progress} settling={gesture.settling} />
           )}
-          <div className="hidden lg:flex flex-col shrink-0 self-stretch min-h-0 pl-3 pt-[72px] pb-[72px] pr-3 z-20">
+          <div
+            className="hidden lg:flex flex-col shrink-0 self-stretch min-h-0 pl-3 pb-[72px] pr-3 z-20"
+            style={{ paddingTop: APP_CONTENT_INSET }}
+          >
             <StaffPanel className="flex h-full" />
           </div>
 

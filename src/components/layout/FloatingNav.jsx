@@ -5,17 +5,13 @@ import {
   FileText,
   Images,
   BookOpen,
-  Bell,
   Search,
-  Settings,
   Command,
   ChevronDown,
   ChevronUp,
   X,
   Clock,
-  Users,
 } from "lucide-react";
-import { currentUser, notifications } from "../../data/mockData";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
 import { briefPath, formatTaskDate } from "../../lib/adTaskBrief";
 import { APP_GUTTER, COMMAND_BAR } from "./chrome";
@@ -23,8 +19,6 @@ import TickerMarquee from "./AnnouncementTicker";
 import { useGetContentList } from "../../api/content/hooks";
 import { unwrapList } from "../../lib/mapContentAsset";
 import useDebounce from "../../hooks/useDebounce";
-import useAuth from "../../hooks/useAuth";
-import { useLogout } from "../../api/auth/hooks";
 
 const navItems = [
   { to: "/", icon: Compass, label: "Discovery" },
@@ -37,20 +31,15 @@ const SETTLE_MS = 280;
 const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export default function FloatingNav({ progress = 0, settling = false }) {
-  const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const navRef = useRef(null);
   const searchRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, openTask, boardItems } =
+  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, boardItems } =
     useCommandCenter();
   const docked = progress > 0.45;
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const { user } = useAuth();
-  const { mutate: signOut } = useLogout();
   const debouncedSearch = useDebounce(searchQuery, 350);
   const { data: searchResp, isFetching: searchLoading } = useGetContentList(
     {
@@ -101,15 +90,11 @@ export default function FloatingNav({ progress = 0, settling = false }) {
   }, [searchQuery, searchResp, navigate, boardItems]);
 
   useEffect(() => {
-    setShowNotifications(false);
     setSearchFocused(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (docked) {
-      setShowNotifications(false);
-      setSearchFocused(false);
-    }
+    if (docked) setSearchFocused(false);
   }, [docked]);
 
   useEffect(() => {
@@ -117,13 +102,9 @@ export default function FloatingNav({ progress = 0, settling = false }) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearchFocused(true);
-        setShowNotifications(false);
         setTimeout(() => searchRef.current?.focus(), 100);
       }
-      if (e.key === "Escape") {
-        setShowNotifications(false);
-        setSearchFocused(false);
-      }
+      if (e.key === "Escape") setSearchFocused(false);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -132,7 +113,6 @@ export default function FloatingNav({ progress = 0, settling = false }) {
   useEffect(() => {
     const handler = (e) => {
       if (navRef.current && !navRef.current.contains(e.target)) {
-        setShowNotifications(false);
         setSearchFocused(false);
       }
     };
@@ -221,56 +201,17 @@ export default function FloatingNav({ progress = 0, settling = false }) {
 
         <div className="flex items-center gap-0.5 flex-shrink-0">
         {!docked && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchFocused((prev) => !prev);
-                setShowNotifications(false);
-                setTimeout(() => searchRef.current?.focus(), 80);
-              }}
-              className={iconBtn(searchFocused)}
-              aria-label="Search"
-            >
-              <Search size={14} />
-            </button>
-
-            <NavLink to="/settings" className={({ isActive }) => iconBtn(isActive)}>
-              <Settings size={14} />
-            </NavLink>
-
-            <NavLink to="/admin" className={({ isActive }) => iconBtn(isActive)}>
-              <Users size={14} />
-            </NavLink>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                setSearchFocused(false);
-              }}
-              className={`${iconBtn(showNotifications)} relative`}
-              aria-label="Notifications"
-            >
-              <Bell size={14} />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full pulse-dot" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => signOut()}
-              className="w-8 h-8 rounded-full overflow-hidden border border-white/[0.14] hover:border-white/30 transition-all duration-200 flex-shrink-0"
-              title="Sign out"
-            >
-              <img
-                src={user?.avatar || user?.image || currentUser.avatar}
-                alt={user?.name || currentUser.name}
-                className="w-full h-full object-cover"
-              />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchFocused((prev) => !prev);
+              setTimeout(() => searchRef.current?.focus(), 80);
+            }}
+            className={iconBtn(searchFocused)}
+            aria-label="Search"
+          >
+            <Search size={14} />
+          </button>
         )}
         </div>
       </div>
@@ -348,44 +289,6 @@ export default function FloatingNav({ progress = 0, settling = false }) {
         </div>
       )}
 
-      {showNotifications && !docked && (
-        <div className={`absolute right-4 ${popoverAnchor} w-80 glass-panel rounded-2xl shadow-2xl shadow-black/40 overflow-hidden fade-in`}>
-          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-white">Notifications</span>
-            <span className="text-[10px] text-accent-red font-semibold px-2 py-0.5 bg-accent-red/10 rounded-full">
-              {unreadCount} new
-            </span>
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {notifications.map((n) => (
-              <button
-                type="button"
-                key={n.id}
-                onClick={() => {
-                  if (n.taskRef) {
-                    openTask(n.taskRef);
-                    setCanvasOpen(true);
-                  }
-                  setShowNotifications(false);
-                }}
-                className={`w-full text-left px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer ${
-                  !n.read ? "bg-white/[0.015]" : ""
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  {!n.read && (
-                    <div className="w-1.5 h-1.5 bg-accent-red rounded-full mt-1.5 flex-shrink-0" />
-                  )}
-                  <div className={!n.read ? "" : "pl-[18px]"}>
-                    <p className="text-[13px] text-white/70 leading-snug">{n.message}</p>
-                    <p className="text-[11px] text-white/25 mt-1">{n.time}</p>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -14,7 +14,8 @@
       "James Okafor"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-07-28",
     "sendDate": "2026-07-20",
@@ -37,7 +38,8 @@
       "James Okafor"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-07-28",
     "sendDate": "2026-07-20",
@@ -60,7 +62,8 @@
       "Tariq Hassan"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -83,7 +86,8 @@
       "Tariq Hassan"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-18",
     "sendDate": "2026-08-12",
@@ -106,7 +110,8 @@
       "Aisha Patel"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -129,7 +134,8 @@
       "Luna Rivera"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-08-12",
@@ -152,7 +158,8 @@
       "Luna Rivera"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-08-12",
@@ -175,7 +182,8 @@
       "Luna Rivera"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-08-12",
@@ -198,7 +206,8 @@
       "Luna Rivera"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-08-12",
@@ -221,7 +230,8 @@
       "Luna Rivera"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-08-12",
@@ -244,7 +254,8 @@
       "Tariq Hassan"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-07-22",
     "sendDate": "2026-07-20",
@@ -267,7 +278,8 @@
       "Aisha Patel"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -290,7 +302,8 @@
       "Tariq Hassan"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -313,7 +326,8 @@
       "Tariq Hassan"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -336,7 +350,8 @@
       "Aisha Patel"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-08-06",
     "sendDate": "2026-07-31",
@@ -397,7 +412,8 @@
     "platform": null,
     "editors": [],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2025-11-29",
     "sendDate": "2025-11-21",
@@ -439,7 +455,8 @@
     "platform": null,
     "editors": [],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2024-06-16",
     "sendDate": null,
@@ -500,7 +517,8 @@
     "platform": "Meta",
     "editors": [],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": null,
     "sendDate": "2026-04-03",
@@ -540,15 +558,19 @@
     "angle": null,
     "painPoint": null,
     "platform": "Meta",
-    "editors": [],
+    "editors": [
+      "Aisha Patel"
+    ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-04-10",
     "sendDate": "2026-03-27",
     "summary": "https://docs.google.com/document/d/1tt5czOv3QZCUwy_C44WTO5eA4Crj6mpAXpJ_RgStQK0/edit?tab=t.0",
     "adCopy": null,
-    "performance": "N/A"
+    "performance": "N/A",
+    "sampleSimulation": true
   },
   {
     "id": "12578884230",
@@ -670,7 +692,8 @@
       "Mika Tanaka"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-01-12",
     "sendDate": "2026-01-09",
@@ -693,7 +716,8 @@
       "Mika Tanaka"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-01-12",
     "sendDate": "2026-01-09",
@@ -716,7 +740,8 @@
       "Mika Tanaka"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-01-12",
     "sendDate": "2026-01-09",
@@ -739,7 +764,8 @@
       "Aisha Patel"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-01-12",
     "sendDate": "2026-01-09",
@@ -762,7 +788,8 @@
       "Mika Tanaka"
     ],
     "creativeStrategists": [
-      "Sofia Andersson"
+      "Sofia Andersson",
+      "Kai Montero"
     ],
     "dueDate": "2026-01-12",
     "sendDate": "2026-01-09",

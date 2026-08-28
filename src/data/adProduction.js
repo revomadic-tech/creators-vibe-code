@@ -272,7 +272,10 @@ export function loadBoardItems() {
     const patches = saved.patches && typeof saved.patches === "object" ? saved.patches : {};
     const byId = Object.fromEntries(
       seed.map((item) => {
-        const patched = applyPatch(item, patches[item.id]);
+        let patched = applyPatch(item, patches[item.id]);
+        if (item.sampleSimulation) {
+          patched = { ...patched, sampleSimulation: true, contentIds: [] };
+        }
         const phase = phases[item.id];
         return [item.id, phase && PHASE_IDS.has(phase) ? { ...patched, phase } : patched];
       }),

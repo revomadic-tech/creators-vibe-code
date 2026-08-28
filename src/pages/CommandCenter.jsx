@@ -28,6 +28,7 @@ import {
   parseTaskDrag,
 } from "../data/adProduction";
 import { findWorkspaceUser, revoProducts, teamMembers } from "../data/mockData";
+import { APP_CONTENT_INSET } from "../components/layout/chrome";
 
 // v2: full column set (all visible by default) — invalidates saved v1 state
 // where half the board was hidden.
@@ -1506,7 +1507,10 @@ export default function CommandCenter() {
 
   return (
     <div className="h-full flex flex-col min-h-0 min-w-0 overflow-hidden">
-      <div className="h-full pr-3 pb-[72px] pt-[72px] fade-in flex flex-col min-h-0 min-w-0 overflow-hidden">
+      <div
+        className="h-full pr-3 pb-[72px] fade-in flex flex-col min-h-0 min-w-0 overflow-hidden"
+        style={{ paddingTop: APP_CONTENT_INSET }}
+      >
         <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
             <div ref={filterRailRef} className="mb-2.5 flex-shrink-0">
               <div
