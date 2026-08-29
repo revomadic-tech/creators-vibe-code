@@ -1,20 +1,58 @@
-import { useState } from "react";
-import { Eye, EyeOff, Lock, Mail, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import LoginOrbs from "../components/login/LoginOrbs";
 import { useLogin, formatError } from "../api/auth/hooks";
+import "../components/login/login.css";
+
+const STATEMENTS = [
+  "The board is warm. Pick it up.",
+  "Every brief, one deck.",
+  "Nothing is waiting on you that can't move today.",
+  "The studio is already working.",
+];
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return now;
+}
+
+function useStatement() {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(
+      () => setIndex((i) => (i + 1) % STATEMENTS.length),
+      7000,
+    );
+    return () => window.clearInterval(id);
+  }, []);
+  return STATEMENTS[index];
+}
 
 export default function Login() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState(null);
+  const now = useClock();
+  const statement = useStatement();
+  const [error, setError] = useState("");
   const { mutate: signIn, isPending } = useLogin();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError(null);
+  const time = now.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const date = now.toLocaleDateString([], {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+
+  const onSubmit = ({ email, password }) => {
+    setError("");
     signIn(
       {
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
+        email: email.trim().toLowerCase(),
+        password,
       },
       {
         onError: (err) => {
@@ -24,95 +62,33 @@ export default function Login() {
           }
           setError(formatError(err) || "Invalid email or password");
         },
-      }
+      },
     );
   };
 
   return (
-    <div className="h-screen lustrous-bg flex items-center justify-center px-6">
-      <div className="ambient-orbs" aria-hidden="true">
-        <span className="orb orb-red" />
-        <span className="orb orb-purple" />
-        <span className="orb orb-orange" />
-      </div>
-      <div className="relative w-full max-w-[420px] glass-panel rounded-2xl border border-white/[0.08] p-8 shadow-2xl shadow-black/40">
-        <p className="text-[10px] font-bold text-white/35 uppercase tracking-[0.2em]">
-          REVO Create
+    <div className="login-stage">
+      <header className="login-crown">
+        <p className="login-wordmark">
+          REVO <span>CREATE</span>
         </p>
-        <h1 className="text-2xl font-black text-white tracking-tight mt-2">
-          Sign in
-        </h1>
-        <p className="text-[13px] text-white/40 mt-2 leading-relaxed">
-          Use your creator account to open the shared content library.
+        <div className="login-clock">
+          <p className="login-clock-time">{time}</p>
+          <p className="login-clock-date">{date}</p>
+        </div>
+      </header>
+
+      <div className="login-lead">
+        <h1 className="login-greeting">Welcome back</h1>
+        <p key={statement} className="login-statement">
+          {statement}
         </p>
-
-        <form onSubmit={handleSubmit} className="mt-8 space-y-3">
-          <label className="block">
-            <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">
-              Email
-            </span>
-            <div className="relative mt-1.5">
-              <Mail
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25"
-              />
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] py-2.5 pl-9 pr-3 text-[13px] text-white placeholder:text-white/25 outline-none focus:border-white/20"
-                placeholder="you@revomadic.com"
-              />
-            </div>
-          </label>
-          <label className="block">
-            <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">
-              Password
-            </span>
-            <div className="relative mt-1.5">
-              <Lock
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25"
-              />
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                autoComplete="current-password"
-                value={form.password}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, password: e.target.value }))
-                }
-                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] py-2.5 pl-9 pr-10 text-[13px] text-white placeholder:text-white/25 outline-none focus:border-white/20"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/55"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </div>
-          </label>
-
-          {error && (
-            <p className="text-[12px] text-accent-red bg-accent-red/10 border border-accent-red/20 rounded-xl px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className="w-full mt-2 py-2.5 bg-accent-red hover:bg-accent-red/90 disabled:opacity-60 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
-          >
-            {isPending ? "Signing in…" : "Sign in"}
-            {!isPending && <ArrowRight size={14} />}
-          </button>
-        </form>
+        <LoginOrbs
+          onSubmit={onSubmit}
+          isLoading={isPending}
+          error={error}
+          hint="Signing in to REVO Studios"
+        />
       </div>
     </div>
   );
