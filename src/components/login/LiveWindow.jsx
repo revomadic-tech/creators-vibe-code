@@ -209,36 +209,34 @@ export default function LiveWindow() {
 
   return (
     <div className="login-live" aria-hidden>
-      <div className="login-live-frame">
-        <div className="login-live-interior">
-          {roster.map((person) => (
-            <article
-              key={person.id}
-              className={`login-presence-card login-presence-card--${person.presence}`}
-              style={{
-                left: `${person.seat.x}%`,
-                top: `${person.seat.y}%`,
-                width: person.seat.size,
-                zIndex: person.seat.depth + 1,
-              }}
-            >
-              <PresencePhoto person={person} />
-              <div className="login-presence-shade" />
-              <span
-                className={`login-presence-dot login-presence-dot--${person.presence}`}
-              />
-              <div className="login-presence-meta">
-                <p className="login-presence-role">{person.role}</p>
-                <h3 className="login-presence-name">{person.name}</h3>
-                <p className="login-presence-activity">{person.activity}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-        <p className="login-live-caption">
-          {onlineCount} signed in · the studio is warm
-        </p>
+      <div className="login-live-interior">
+        {roster.map((person) => (
+          <article
+            key={person.id}
+            className={`login-presence-card login-presence-card--${person.presence}`}
+            style={{
+              left: `${person.seat.x}%`,
+              top: `${person.seat.y}%`,
+              width: person.seat.size,
+              zIndex: person.seat.depth + 1,
+            }}
+          >
+            <PresencePhoto person={person} />
+            <div className="login-presence-shade" />
+            <span
+              className={`login-presence-dot login-presence-dot--${person.presence}`}
+            />
+            <div className="login-presence-meta">
+              <p className="login-presence-role">{person.role}</p>
+              <h3 className="login-presence-name">{person.name}</h3>
+              <p className="login-presence-activity">{person.activity}</p>
+            </div>
+          </article>
+        ))}
       </div>
+      <p className="login-live-caption">
+        {onlineCount} signed in · the studio is warm
+      </p>
     </div>
   );
 }
