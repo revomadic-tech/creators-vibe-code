@@ -24,6 +24,17 @@ import {
   AD_STATUS_COLORS,
   AD_STATUS_OPTIONS,
 } from "../../data/adProduction";
+import {
+  WD_PHASES,
+  WD_PLATFORM_COLORS,
+  WD_PLATFORM_OPTIONS,
+  WD_STATUS_COLORS,
+  WD_STATUS_OPTIONS,
+  WD_TYPE_COLORS,
+  WD_TYPE_OPTIONS,
+  isWebDevItem,
+} from "../../data/productionsWebDev";
+import { getCommandBoard, boardIdForItem } from "../../data/commandBoards";
 import { currentUser, findWorkspaceUser, teamMembers } from "../../data/mockData";
 import { staffActivity, taskThreads } from "../../data/staffPanel";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
@@ -243,6 +254,7 @@ export default function TaskBriefDetail({
   idPrefix = "task",
 }) {
   const [draft, setDraft] = useState("");
+  const [nameDraft, setNameDraft] = useState(item?.name || "");
   const [notes, setNotes] = useState([]);
   const [activeTab, setActiveTab] = useState(
     item?.sampleSimulation ? "submissions" : "details",
@@ -253,6 +265,11 @@ export default function TaskBriefDetail({
   const { updateTask, moveTask, setOpen, openTask } = useCommandCenter();
 
   const phase = item ? PHASE_BY_ID[item.phase] : null;
+  const webDev = isWebDevItem(item);
+  const boardMeta = getCommandBoard(boardIdForItem(item));
+  const boardPhases = webDev ? WD_PHASES : AD_PHASES;
+  const statusOptions = webDev ? WD_STATUS_OPTIONS : AD_STATUS_OPTIONS;
+  const statusColors = webDev ? { ...AD_STATUS_COLORS, ...WD_STATUS_COLORS } : AD_STATUS_COLORS;
   const timeline = useMemo(() => (item ? buildTimeline(item) : []), [item]);
   const adminBrief = useMemo(() => (item ? resolveAdminBrief(item) : null), [item]);
   const adCopyDoc = useMemo(
@@ -266,6 +283,10 @@ export default function TaskBriefDetail({
   }, [item?.id, item?.summary]);
 
   useEffect(() => {
+    setNameDraft(item?.name || "");
+  }, [item?.id, item?.name]);
+
+  useEffect(() => {
     setReviewAsset(null);
     setActiveTab(item?.sampleSimulation ? "submissions" : "details");
   }, [item?.id, item?.sampleSimulation]);
@@ -273,6 +294,11 @@ export default function TaskBriefDetail({
   if (!item) return null;
 
   const patch = (fields) => updateTask(item.id, fields);
+  const commitName = () => {
+    const next = nameDraft.trim();
+    if (next !== (item.name || "")) patch({ name: next });
+    else if (nameDraft !== (item.name || "")) setNameDraft(item.name || "");
+  };
   const openOnBoard = () => {
     openTask(item.id);
     setOpen(true);
@@ -307,20 +333,39 @@ export default function TaskBriefDetail({
       <header className={`flex shrink-0 flex-col space-y-2 border-b border-stone-200/80 bg-white/90 ${page ? "px-6 pt-5" : "px-5 pt-4"}`}>
         <div className="flex items-start gap-3 min-w-0">
           <div className="min-w-0 flex-1 space-y-2">
-            <h2
+            <div
               id={titleId}
               className={`font-semibold leading-snug tracking-tight text-stone-900 ${page ? "text-[26px]" : "text-[18px]"}`}
             >
-              {item.name}
+              <input
+                data-command-interactive
+                autoFocus={!item.name?.trim()}
+                value={nameDraft}
+                placeholder="Untitled ad"
+                aria-label="Ad name"
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setNameDraft(item.name || "");
+                    e.currentTarget.blur();
+                  }
+                }}
+                className={`w-full bg-transparent outline-none placeholder:text-stone-300 placeholder:italic ${page ? "text-[26px]" : "text-[18px]"}`}
+              />
               {item.product ? (
                 <span className="font-semibold text-stone-400"> · {item.product}</span>
               ) : null}
-            </h2>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <EditablePill
                 value={item.status}
-                options={AD_STATUS_OPTIONS}
-                colors={AD_STATUS_COLORS}
+                options={statusOptions}
+                colors={statusColors}
                 ariaLabel="Status"
                 onChange={(status) => patch({ status })}
               />
@@ -353,16 +398,16 @@ export default function TaskBriefDetail({
               data-command-interactive
               onClick={openOnBoard}
               className="font-medium text-stone-700 hover:text-stone-950"
-              title="Open this row on Ad Production"
+              title={`Open this row on ${boardMeta.label}`}
             >
-              Ad Production
+              {boardMeta.label}
             </button>
             {phase && (
               <>
                 <span className="text-stone-300">›</span>
                 <BoardFieldMenu
                   value={item.phase}
-                  options={AD_PHASES.map((p) => ({
+                  options={boardPhases.map((p) => ({
                     value: p.id,
                     label: p.title,
                     color: p.color,
@@ -383,20 +428,32 @@ export default function TaskBriefDetail({
 
         <section className="overflow-hidden rounded-xl border border-stone-200/80 bg-white">
           <div className={`grid ${headerCols} gap-px bg-stone-100/80`}>
-            <MetaCell label="Editor">
+            <MetaCell label={webDev ? "Owner" : "Editor"}>
               <EditablePeople
                 names={item.editors}
-                ariaLabel="Editor"
+                ariaLabel={webDev ? "Owner" : "Editor"}
                 onChange={(editors) => patch({ editors })}
               />
             </MetaCell>
-            <MetaCell label="Strategist">
-              <EditablePeople
-                names={item.creativeStrategists}
-                ariaLabel="Strategist"
-                onChange={(creativeStrategists) => patch({ creativeStrategists })}
-              />
-            </MetaCell>
+            {webDev ? (
+              <MetaCell label="Type">
+                <EditablePill
+                  value={item.type}
+                  options={WD_TYPE_OPTIONS}
+                  colors={WD_TYPE_COLORS}
+                  ariaLabel="Type"
+                  onChange={(type) => patch({ type })}
+                />
+              </MetaCell>
+            ) : (
+              <MetaCell label="Strategist">
+                <EditablePeople
+                  names={item.creativeStrategists}
+                  ariaLabel="Strategist"
+                  onChange={(creativeStrategists) => patch({ creativeStrategists })}
+                />
+              </MetaCell>
+            )}
             <MetaCell label="Timeline">
               <span
                 className={`inline-flex items-center gap-1 truncate text-[12px] ${
@@ -412,15 +469,32 @@ export default function TaskBriefDetail({
                 {overdue ? <span className="text-[11px]">· Overdue</span> : null}
               </span>
             </MetaCell>
-            <MetaCell label="Send date">
-              <span className="inline-flex items-center gap-1 text-[12px] text-stone-700">
-                <Clock3 size={12} className="shrink-0 text-stone-400" />
-                <DateInput
-                  value={item.sendDate}
-                  onChange={(sendDate) => patch({ sendDate })}
-                />
-              </span>
-            </MetaCell>
+            {webDev ? (
+              <MetaCell label="Link">
+                {item.link ? (
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate text-[12px] font-medium text-sky-700 hover:underline"
+                  >
+                    Open
+                  </a>
+                ) : (
+                  <span className="text-[12px] text-stone-400">—</span>
+                )}
+              </MetaCell>
+            ) : (
+              <MetaCell label="Send date">
+                <span className="inline-flex items-center gap-1 text-[12px] text-stone-700">
+                  <Clock3 size={12} className="shrink-0 text-stone-400" />
+                  <DateInput
+                    value={item.sendDate}
+                    onChange={(sendDate) => patch({ sendDate })}
+                  />
+                </span>
+              </MetaCell>
+            )}
           </div>
         </section>
 
@@ -480,55 +554,98 @@ export default function TaskBriefDetail({
               >
                 <section className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm shadow-stone-900/[0.03]">
                   <div className={`grid ${detailCols} gap-px bg-stone-100/80`}>
-                    <MetaCell label="Angle">
-                      <EditablePill
-                        value={item.angle}
-                        options={AD_ANGLE_OPTIONS}
-                        colors={AD_ANGLE_COLORS}
-                        ariaLabel="Angle"
-                        onChange={(angle) => patch({ angle })}
-                      />
-                    </MetaCell>
-                    <MetaCell label="Style">
-                      <EditablePill
-                        value={item.editingStyle}
-                        options={AD_EDITING_STYLE_OPTIONS}
-                        colors={AD_EDITING_STYLE_COLORS}
-                        ariaLabel="Style"
-                        onChange={(editingStyle) => patch({ editingStyle })}
-                      />
-                    </MetaCell>
-                    <MetaCell label="Platform">
-                      <EditablePill
-                        value={item.platform}
-                        options={AD_PLATFORM_OPTIONS}
-                        colors={AD_PLATFORM_COLORS}
-                        ariaLabel="Platform"
-                        onChange={(platform) => patch({ platform })}
-                      />
-                    </MetaCell>
-                    <MetaCell label="Pain point">
-                      <EditablePill
-                        value={item.painPoint}
-                        options={AD_PAIN_POINT_OPTIONS}
-                        colors={AD_PAIN_POINT_COLORS}
-                        ariaLabel="Pain point"
-                        onChange={(painPoint) => patch({ painPoint })}
-                      />
-                    </MetaCell>
-                    <MetaCell label="Performance">
-                      <EditablePill
-                        value={item.performance}
-                        options={AD_PERFORMANCE_OPTIONS}
-                        colors={AD_PERFORMANCE_COLORS}
-                        ariaLabel="Performance"
-                        onChange={(performance) => patch({ performance })}
-                      />
-                    </MetaCell>
+                    {webDev ? (
+                      <>
+                        <MetaCell label="Type">
+                          <EditablePill
+                            value={item.type}
+                            options={WD_TYPE_OPTIONS}
+                            colors={WD_TYPE_COLORS}
+                            ariaLabel="Type"
+                            onChange={(type) => patch({ type })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Channel">
+                          <EditablePill
+                            value={item.platform}
+                            options={WD_PLATFORM_OPTIONS}
+                            colors={{ ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS }}
+                            ariaLabel="Channel"
+                            onChange={(platform) => patch({ platform })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Link">
+                          {item.link ? (
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate text-[12px] font-medium text-sky-700 hover:underline"
+                            >
+                              {item.link.replace(/^https?:\/\//, "")}
+                            </a>
+                          ) : (
+                            <span className="text-[12px] text-stone-400">No link</span>
+                          )}
+                        </MetaCell>
+                      </>
+                    ) : (
+                      <>
+                        <MetaCell label="Angle">
+                          <EditablePill
+                            value={item.angle}
+                            options={AD_ANGLE_OPTIONS}
+                            colors={AD_ANGLE_COLORS}
+                            ariaLabel="Angle"
+                            onChange={(angle) => patch({ angle })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Style">
+                          <EditablePill
+                            value={item.editingStyle}
+                            options={AD_EDITING_STYLE_OPTIONS}
+                            colors={AD_EDITING_STYLE_COLORS}
+                            ariaLabel="Style"
+                            onChange={(editingStyle) => patch({ editingStyle })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Platform">
+                          <EditablePill
+                            value={item.platform}
+                            options={AD_PLATFORM_OPTIONS}
+                            colors={AD_PLATFORM_COLORS}
+                            ariaLabel="Platform"
+                            onChange={(platform) => patch({ platform })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Pain point">
+                          <EditablePill
+                            value={item.painPoint}
+                            options={AD_PAIN_POINT_OPTIONS}
+                            colors={AD_PAIN_POINT_COLORS}
+                            ariaLabel="Pain point"
+                            onChange={(painPoint) => patch({ painPoint })}
+                          />
+                        </MetaCell>
+                        <MetaCell label="Performance">
+                          <EditablePill
+                            value={item.performance}
+                            options={AD_PERFORMANCE_OPTIONS}
+                            colors={AD_PERFORMANCE_COLORS}
+                            ariaLabel="Performance"
+                            onChange={(performance) => patch({ performance })}
+                          />
+                        </MetaCell>
+                      </>
+                    )}
                   </div>
                 </section>
 
-                {adminBrief?.title ? (
+                {webDev ? (
+                  <p className="px-0.5 text-[12px] text-stone-400">
+                    Edits here update the Productions & Web Dev board.
+                  </p>
+                ) : adminBrief?.title ? (
                   <p className="px-0.5 text-[12px] text-stone-500">
                     Formed from <span className="font-semibold text-stone-700">{adminBrief.title}</span>
                     <span className="text-stone-400"> · campaign guidelines stay on Brief · edits update Ad Production</span>
@@ -539,7 +656,7 @@ export default function TaskBriefDetail({
                   </p>
                 )}
 
-                <AdCopyDoc doc={adCopyDoc} page={page} />
+                {webDev ? null : <AdCopyDoc doc={adCopyDoc} page={page} />}
 
                 <section className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm shadow-stone-900/[0.03]">
                   <div className="px-3.5 py-3">

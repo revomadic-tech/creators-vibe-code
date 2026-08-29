@@ -1,4 +1,15 @@
 import adProductionSeed from "./adProduction.seed.json";
+import {
+  boardActorId,
+  claimUnownedDrafts,
+  createBoardEngine,
+  findBoardItem,
+  parseTaskDrag,
+  PATCHABLE_FIELDS,
+  visibleBoardItems,
+} from "./boardEngine";
+
+export const BOARD_AD_PRODUCTION = "ad-production";
 
 export const AD_PHASES = [
   { id: "topics", title: "Video Editing Phase", color: "#14b8a6" },
@@ -211,169 +222,25 @@ export const AD_PAIN_POINT_OPTIONS = Object.keys(AD_PAIN_POINT_COLORS);
 export const AD_PLATFORM_OPTIONS = Object.keys(AD_PLATFORM_COLORS);
 export const AD_PERFORMANCE_OPTIONS = Object.keys(AD_PERFORMANCE_COLORS);
 
-export { adProductionSeed };
+export { adProductionSeed, boardActorId, claimUnownedDrafts, parseTaskDrag, PATCHABLE_FIELDS, visibleBoardItems };
 
 export const BOARD_LAYOUT_KEY = "revo.commandCenter.boardLayout.v1";
 
-const PHASE_IDS = new Set(AD_PHASES.map((p) => p.id));
+const engine = createBoardEngine({
+  phases: AD_PHASES,
+  seed: adProductionSeed,
+  storageKey: BOARD_LAYOUT_KEY,
+  boardId: BOARD_AD_PRODUCTION,
+});
 
-export const PATCHABLE_FIELDS = [
-  "status",
-  "product",
-  "priority",
-  "editingStyle",
-  "angle",
-  "painPoint",
-  "platform",
-  "editors",
-  "creativeStrategists",
-  "dueDate",
-  "sendDate",
-  "summary",
-  "adCopy",
-  "performance",
-  "name",
-  "contentIds",
-];
-
-function valuesEqual(a, b) {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-
-function applyPatch(item, patch) {
-  if (!patch || typeof patch !== "object") return item;
-  const next = { ...item };
-  let changed = false;
-  for (const key of PATCHABLE_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
-    if (valuesEqual(item[key], patch[key])) continue;
-    next[key] = patch[key];
-    changed = true;
-  }
-  return changed ? next : item;
-}
+export const blankBoardTask = engine.blankBoardTask;
+export const loadBoardItems = engine.loadBoardItems;
+export const persistBoardItems = engine.persistBoardItems;
+export const createBoardTask = engine.createBoardTask;
+export const updateBoardTask = engine.updateBoardTask;
+export const moveBoardTask = engine.moveBoardTask;
 
 /** Resolve a board item by monday id, `#1683`, or `1683`. */
 export function findAdTask(ref, list = adProductionSeed) {
-  if (ref == null || ref === "") return null;
-  const raw = String(ref).trim();
-  const byId = list.find((item) => item.id === raw);
-  if (byId) return byId;
-  const name = raw.startsWith("#") ? raw : `#${raw.replace(/^#/, "")}`;
-  return list.find((item) => item.name === name) || null;
-}
-
-export function loadBoardItems() {
-  const seed = adProductionSeed.map((item) => ({ ...item }));
-  try {
-    const saved = JSON.parse(localStorage.getItem(BOARD_LAYOUT_KEY) || "null");
-    if (!saved || typeof saved !== "object") return seed;
-    const phases = saved.phases && typeof saved.phases === "object" ? saved.phases : {};
-    const patches = saved.patches && typeof saved.patches === "object" ? saved.patches : {};
-    const byId = Object.fromEntries(
-      seed.map((item) => {
-        let patched = applyPatch(item, patches[item.id]);
-        if (item.sampleSimulation) {
-          patched = { ...patched, sampleSimulation: true, contentIds: [] };
-        }
-        const phase = phases[item.id];
-        return [item.id, phase && PHASE_IDS.has(phase) ? { ...patched, phase } : patched];
-      }),
-    );
-    const next = [];
-    const seen = new Set();
-    for (const id of Array.isArray(saved.order) ? saved.order : []) {
-      if (byId[id] && !seen.has(id)) {
-        next.push(byId[id]);
-        seen.add(id);
-      }
-    }
-    for (const item of seed) {
-      if (!seen.has(item.id)) next.push(byId[item.id]);
-    }
-    return next;
-  } catch {
-    return seed;
-  }
-}
-
-export function persistBoardItems(items) {
-  try {
-    const seedById = Object.fromEntries(adProductionSeed.map((item) => [item.id, item]));
-    const patches = {};
-    for (const item of items) {
-      const seed = seedById[item.id];
-      if (!seed) continue;
-      const patch = {};
-      for (const key of PATCHABLE_FIELDS) {
-        if (!valuesEqual(item[key], seed[key])) patch[key] = item[key] ?? null;
-      }
-      if (Object.keys(patch).length) patches[item.id] = patch;
-    }
-    localStorage.setItem(
-      BOARD_LAYOUT_KEY,
-      JSON.stringify({
-        phases: Object.fromEntries(items.map((item) => [item.id, item.phase])),
-        order: items.map((item) => item.id),
-        patches,
-      }),
-    );
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
-/** Patch task fields. Phase changes go through `moveBoardTask` so order stays intact. */
-export function updateBoardTask(items, taskId, patch) {
-  const idx = items.findIndex((item) => item.id === taskId);
-  if (idx < 0) return items;
-  const nextItem = applyPatch(items[idx], patch);
-  if (nextItem === items[idx]) return items;
-  const next = items.slice();
-  next[idx] = nextItem;
-  return next;
-}
-
-export function parseTaskDrag(data) {
-  const raw = String(data || "");
-  return raw.startsWith("task:") ? raw.slice(5) : null;
-}
-
-/** Move a task into a phase, optionally inserting before another item.
- *  `beforeId` undefined = drop on section (no-op if already there, else append).
- *  `beforeId` null = append to the section.
- *  `beforeId` string = insert before that item.
- */
-export function moveBoardTask(items, taskId, toPhase, beforeId) {
-  if (!PHASE_IDS.has(toPhase)) return items;
-  const from = items.find((item) => item.id === taskId);
-  if (!from) return items;
-
-  const samePhase = from.phase === toPhase;
-  if (samePhase && beforeId === undefined) return items;
-  if (samePhase && beforeId === taskId) return items;
-
-  if (samePhase && (beforeId === null || beforeId === undefined)) {
-    const group = items.filter((item) => item.phase === toPhase);
-    if (group[group.length - 1]?.id === taskId) return items;
-  }
-
-  const without = items.filter((item) => item.id !== taskId);
-  const moved = { ...from, phase: toPhase };
-  if (typeof beforeId === "string" && beforeId && beforeId !== taskId) {
-    const idx = without.findIndex((item) => item.id === beforeId);
-    if (idx >= 0) {
-      without.splice(idx, 0, moved);
-      return without;
-    }
-  }
-  let insertAt = without.length;
-  for (let i = without.length - 1; i >= 0; i -= 1) {
-    if (without[i].phase === toPhase) {
-      insertAt = i + 1;
-      break;
-    }
-  }
-  without.splice(insertAt, 0, moved);
-  return without;
+  return findBoardItem(ref, list);
 }

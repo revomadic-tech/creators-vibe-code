@@ -43,7 +43,7 @@ export default function Login() {
           Sign in
         </h1>
         <p className="text-[13px] text-white/40 mt-2 leading-relaxed">
-          Use your creator account to open the shared content library.
+          Use your REVO account. Briefs are assigned from admin; you produce and submit here.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-3">

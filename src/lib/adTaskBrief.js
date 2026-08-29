@@ -1,12 +1,17 @@
-import { AD_PHASES, findAdTask } from "../data/adProduction";
+import { findAdTask } from "../data/adProduction";
+import { ALL_PHASES } from "../data/commandBoards";
+import { WD_CLOSED_STATUSES } from "../data/productionsWebDev";
 import { currentUser, findWorkspaceUser } from "../data/mockData";
 
 export const CLOSED_STATUSES = new Set([
   "Approved",
   "Launched",
   "Applovin Launched",
+  "Shipped",
+  "Live",
   "done",
   "cancelled",
+  ...WD_CLOSED_STATUSES,
 ]);
 
 export const REVIEW_STATUSES = new Set([
@@ -22,7 +27,7 @@ export const REVIEW_STATUSES = new Set([
   "Design review",
 ]);
 
-export const PHASE_BY_ID = Object.fromEntries(AD_PHASES.map((p) => [p.id, p]));
+export const PHASE_BY_ID = Object.fromEntries(ALL_PHASES.map((p) => [p.id, p]));
 
 export function hexToRgb(hex) {
   const h = (hex || "").replace("#", "");
@@ -104,7 +109,7 @@ export function itemPeople(item) {
 }
 
 export function groupByProductThenPhase(items) {
-  const phaseOrder = Object.fromEntries(AD_PHASES.map((p, i) => [p.id, i]));
+  const phaseOrder = Object.fromEntries(ALL_PHASES.map((p, i) => [p.id, i]));
   const byProduct = new Map();
   for (const item of items) {
     const product = item.product || "Unassigned";

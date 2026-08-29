@@ -4,6 +4,7 @@ import {
   Columns3,
   EyeOff,
   GripVertical,
+  LayoutGrid,
   Plus,
   RotateCcw,
   Search,
@@ -24,9 +25,18 @@ import {
   AD_PRIORITY_COLORS,
   AD_PRODUCT_COLORS,
   AD_STATUS_COLORS,
-  adProductionSeed,
   parseTaskDrag,
 } from "../data/adProduction";
+import {
+  BOARD_AD_PRODUCTION,
+  COMMAND_BOARDS,
+  getCommandBoard,
+} from "../data/commandBoards";
+import {
+  WD_PLATFORM_COLORS,
+  WD_STATUS_COLORS,
+  WD_TYPE_COLORS,
+} from "../data/productionsWebDev";
 import { findWorkspaceUser, revoProducts, teamMembers } from "../data/mockData";
 import { APP_CONTENT_INSET } from "../components/layout/chrome";
 
@@ -34,37 +44,84 @@ import { APP_CONTENT_INSET } from "../components/layout/chrome";
 // where half the board was hidden.
 const COLUMN_STORAGE_KEY = "revo.commandCenter.boardColumns.v5";
 const OPEN_GROUP_STORAGE_KEY = "revo.commandCenter.lastOpenGroup.v1";
+const VIEW_STORAGE_KEY = "revo.commandCenter.boardView.v1";
+const BOARD_VIEWS = [
+  { id: "table", label: "Table", icon: Table2 },
+  { id: "kanban", label: "Kanban", icon: LayoutGrid },
+];
+
+function columnStorageKey(board) {
+  return board.columnStorageKey || COLUMN_STORAGE_KEY;
+}
+
+function openGroupStorageKey(board) {
+  return board.openGroupStorageKey || OPEN_GROUP_STORAGE_KEY;
+}
+
+function loadBoardView(boardId) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "null");
+    const view = raw?.[boardId];
+    if (view === "kanban" || view === "table") return view;
+  } catch {
+    /* ignore private mode */
+  }
+  return "table";
+}
+
+function persistBoardView(boardId, view) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "{}") || {};
+    if (!raw || typeof raw !== "object") return;
+    raw[boardId] = view;
+    localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(raw));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 /**
  * Groups default to collapsed; only the section the user last expanded
  * (persisted) starts open. Falls back to the first phase on first visit.
  */
-function loadInitialOpenGroups() {
+function loadInitialOpenGroups(board = getCommandBoard(BOARD_AD_PRODUCTION)) {
   let lastOpen = null;
   try {
-    lastOpen = localStorage.getItem(OPEN_GROUP_STORAGE_KEY);
+    lastOpen = localStorage.getItem(openGroupStorageKey(board));
   } catch {
     /* ignore private mode */
   }
-  const openId = AD_PHASES.some((p) => p.id === lastOpen)
-    ? lastOpen
-    : AD_PHASES[0].id;
-  return Object.fromEntries(AD_PHASES.map((p) => [p.id, p.id === openId]));
+  const phases = board.phases;
+  const openId = phases.some((p) => p.id === lastOpen) ? lastOpen : phases[0]?.id;
+  return Object.fromEntries(phases.map((p) => [p.id, p.id === openId]));
 }
-const COLUMN_BY_ID = Object.fromEntries(AD_BOARD_COLUMNS.map((col) => [col.id, col]));
 
-// Categorical columns get a Monday-style segmented rollup on the group header.
+function phaseForNewTask(openGroups, board) {
+  let lastOpen = null;
+  try {
+    lastOpen = localStorage.getItem(openGroupStorageKey(board));
+  } catch {
+    /* ignore private mode */
+  }
+  const phases = board.phases;
+  if (lastOpen && phases.some((p) => p.id === lastOpen)) return lastOpen;
+  return phases.find((p) => openGroups[p.id])?.id || phases[0]?.id;
+}
+
+const COLUMN_BY_ID = Object.fromEntries(AD_BOARD_COLUMNS.map((col) => [col.id, col]));
 const ROLLUP_GETTERS = {
   status: (i) => [i.status],
   product: (i) => [i.product],
   priority: (i) => [i.priority],
   editor: (i) => i.editors || [],
+  owner: (i) => i.editors || [],
   angle: (i) => [i.angle],
   style: (i) => [i.editingStyle],
   platform: (i) => [i.platform],
   painPoint: (i) => [i.painPoint],
   strategist: (i) => i.creativeStrategists || [],
   performance: (i) => [i.performance],
+  type: (i) => [i.type],
 };
 
 const USER_ROLLUP_COLORS = Object.fromEntries(
@@ -72,16 +129,18 @@ const USER_ROLLUP_COLORS = Object.fromEntries(
 );
 
 const ROLLUP_COLORS = {
-  status: AD_STATUS_COLORS,
+  status: { ...AD_STATUS_COLORS, ...WD_STATUS_COLORS },
   product: AD_PRODUCT_COLORS,
   priority: AD_PRIORITY_COLORS,
   editor: USER_ROLLUP_COLORS,
+  owner: USER_ROLLUP_COLORS,
   angle: AD_ANGLE_COLORS,
   style: AD_EDITING_STYLE_COLORS,
-  platform: AD_PLATFORM_COLORS,
+  platform: { ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS },
   painPoint: AD_PAIN_POINT_COLORS,
   strategist: USER_ROLLUP_COLORS,
   performance: AD_PERFORMANCE_COLORS,
+  type: WD_TYPE_COLORS,
 };
 const DEFAULT_ORDER = AD_BOARD_COLUMNS.map((col) => col.id);
 const DEFAULT_HIDDEN = AD_BOARD_COLUMNS.filter((col) => col.defaultHidden).map(
@@ -89,7 +148,7 @@ const DEFAULT_HIDDEN = AD_BOARD_COLUMNS.filter((col) => col.defaultHidden).map(
 );
 const DEFAULT_WIDTHS = Object.fromEntries(AD_BOARD_COLUMNS.map((col) => [col.id, col.width]));
 const COL_MAX_WIDTH = 480;
-const CENTERED_COLS = new Set(["product", "editor", "strategist", "platform"]);
+const CENTERED_COLS = new Set(["product", "editor", "owner", "strategist", "platform"]);
 const STICKY_BG = "#0a0b10";
 const HEADER_BG = "#101218";
 const ROW_HOVER = "#14161e";
@@ -334,6 +393,8 @@ const CLOSED_STATUSES = new Set([
   "Approved",
   "Launched",
   "Applovin Launched",
+  "Shipped",
+  "Live",
   "done",
   "cancelled",
 ]);
@@ -344,87 +405,130 @@ function isOverdue(item) {
   return !Number.isNaN(due.getTime()) && due < new Date();
 }
 
-function loadColumnState() {
+function columnMeta(board) {
+  const columns = board?.columns || AD_BOARD_COLUMNS;
+  return {
+    byId: Object.fromEntries(columns.map((col) => [col.id, col])),
+    order: columns.map((col) => col.id),
+    hidden: columns.filter((col) => col.defaultHidden).map((col) => col.id),
+    widths: Object.fromEntries(columns.map((col) => [col.id, col.width])),
+  };
+}
+
+function loadColumnState(board = getCommandBoard(BOARD_AD_PRODUCTION)) {
+  const meta = columnMeta(board);
   try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
-    if (!raw) return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN, widths: DEFAULT_WIDTHS };
+    const raw = localStorage.getItem(columnStorageKey(board));
+    if (!raw) return { order: meta.order, hidden: meta.hidden, widths: meta.widths };
     const parsed = JSON.parse(raw);
     const savedOrder = Array.isArray(parsed.order) ? parsed.order : [];
-    const known = new Set(DEFAULT_ORDER);
+    const known = new Set(meta.order);
     const order = [
       "item",
       ...savedOrder.filter((id) => id !== "item" && known.has(id)),
-      ...DEFAULT_ORDER.filter((id) => id !== "item" && !savedOrder.includes(id)),
+      ...meta.order.filter((id) => id !== "item" && !savedOrder.includes(id)),
     ];
-    const hidden = (Array.isArray(parsed.hidden) ? parsed.hidden : DEFAULT_HIDDEN).filter(
-      (id) => known.has(id) && COLUMN_BY_ID[id]?.hideable !== false,
+    const hidden = (Array.isArray(parsed.hidden) ? parsed.hidden : meta.hidden).filter(
+      (id) => known.has(id) && meta.byId[id]?.hideable !== false,
     );
     const savedWidths = parsed.widths && typeof parsed.widths === "object" ? parsed.widths : {};
-    const widths = { ...DEFAULT_WIDTHS };
-    for (const id of DEFAULT_ORDER) {
+    const widths = { ...meta.widths };
+    for (const id of meta.order) {
       const w = Number(savedWidths[id]);
-      if (Number.isFinite(w)) widths[id] = clampColWidth(COLUMN_BY_ID[id], w);
+      if (Number.isFinite(w)) widths[id] = clampColWidth(meta.byId[id], w);
     }
     return { order, hidden, widths };
   } catch {
-    return { order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN, widths: DEFAULT_WIDTHS };
+    return { order: meta.order, hidden: meta.hidden, widths: meta.widths };
   }
 }
 
 // Master filter facets — every labeled field on the board is filterable.
-const FACET_DEFS = [
-  {
-    id: "phase",
-    label: "Phase",
-    values: (item) => [item.phase],
-    colors: Object.fromEntries(AD_PHASES.map((p) => [p.id, p.color])),
-    format: (v) => AD_PHASES.find((p) => p.id === v)?.title || v,
-    order: AD_PHASES.map((p) => p.id),
-  },
-  { id: "status", label: "Status", values: (i) => [i.status], colors: AD_STATUS_COLORS },
-  { id: "product", label: "Product", values: (i) => [i.product], colors: AD_PRODUCT_COLORS },
-  { id: "priority", label: "Priority", values: (i) => [i.priority], colors: AD_PRIORITY_COLORS },
-  {
-    id: "editor",
-    label: "Editor",
-    values: (i) => i.editors || [],
-    people: true,
-    format: (v) => findWorkspaceUser(v)?.name || v,
-  },
-  {
-    id: "strategist",
-    label: "Strategist",
-    values: (i) => i.creativeStrategists || [],
-    people: true,
-    format: (v) => findWorkspaceUser(v)?.name || v,
-  },
-  { id: "angle", label: "Angle", values: (i) => [i.angle], colors: AD_ANGLE_COLORS },
-  { id: "style", label: "Style", values: (i) => [i.editingStyle], colors: AD_EDITING_STYLE_COLORS },
-  { id: "platform", label: "Platform", values: (i) => [i.platform], colors: AD_PLATFORM_COLORS },
-  { id: "painPoint", label: "Pain Point", values: (i) => [i.painPoint], colors: AD_PAIN_POINT_COLORS },
-  { id: "performance", label: "Performance", values: (i) => [i.performance], colors: AD_PERFORMANCE_COLORS },
-];
+function facetDefsFor(board) {
+  const phases = board.phases || AD_PHASES;
+  const shared = [
+    {
+      id: "phase",
+      label: "Phase",
+      values: (item) => [item.phase],
+      colors: Object.fromEntries(phases.map((p) => [p.id, p.color])),
+      format: (v) => phases.find((p) => p.id === v)?.title || v,
+      order: phases.map((p) => p.id),
+    },
+    { id: "status", label: "Status", values: (i) => [i.status], colors: board.statusColors || AD_STATUS_COLORS },
+    { id: "product", label: "Product", values: (i) => [i.product], colors: AD_PRODUCT_COLORS },
+    { id: "priority", label: "Priority", values: (i) => [i.priority], colors: AD_PRIORITY_COLORS },
+  ];
+  if (board.id !== BOARD_AD_PRODUCTION) {
+    return [
+      ...shared,
+      {
+        id: "type",
+        label: "Type",
+        values: (i) => [i.type],
+        colors: WD_TYPE_COLORS,
+      },
+      {
+        id: "owner",
+        label: "Owner",
+        values: (i) => i.editors || [],
+        people: true,
+        format: (v) => findWorkspaceUser(v)?.name || v,
+      },
+      {
+        id: "platform",
+        label: "Channel",
+        values: (i) => [i.platform],
+        colors: board.platformColors || AD_PLATFORM_COLORS,
+      },
+    ];
+  }
+  return [
+    ...shared,
+    {
+      id: "editor",
+      label: "Editor",
+      values: (i) => i.editors || [],
+      people: true,
+      format: (v) => findWorkspaceUser(v)?.name || v,
+    },
+    {
+      id: "strategist",
+      label: "Strategist",
+      values: (i) => i.creativeStrategists || [],
+      people: true,
+      format: (v) => findWorkspaceUser(v)?.name || v,
+    },
+    { id: "angle", label: "Angle", values: (i) => [i.angle], colors: AD_ANGLE_COLORS },
+    { id: "style", label: "Style", values: (i) => [i.editingStyle], colors: AD_EDITING_STYLE_COLORS },
+    { id: "platform", label: "Platform", values: (i) => [i.platform], colors: AD_PLATFORM_COLORS },
+    { id: "painPoint", label: "Pain Point", values: (i) => [i.painPoint], colors: AD_PAIN_POINT_COLORS },
+    { id: "performance", label: "Performance", values: (i) => [i.performance], colors: AD_PERFORMANCE_COLORS },
+  ];
+}
 
-// Options with row counts, computed once from the static seed.
-const FACET_OPTIONS = Object.fromEntries(
-  FACET_DEFS.map((def) => {
-    const counts = new Map();
-    adProductionSeed.forEach((item) => {
-      def.values(item)
-        .filter(Boolean)
-        .forEach((v) => counts.set(v, (counts.get(v) || 0) + 1));
-    });
-    const options = [...counts.entries()].map(([value, count]) => ({ value, count }));
-    if (def.order) {
-      options.sort((a, b) => def.order.indexOf(a.value) - def.order.indexOf(b.value));
-    } else {
-      options.sort(
-        (a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value)),
-      );
-    }
-    return [def.id, options];
-  }),
-);
+function facetOptionsFor(board) {
+  const seed = board.seed || [];
+  return Object.fromEntries(
+    facetDefsFor(board).map((def) => {
+      const counts = new Map();
+      seed.forEach((item) => {
+        def.values(item)
+          .filter(Boolean)
+          .forEach((v) => counts.set(v, (counts.get(v) || 0) + 1));
+      });
+      const options = [...counts.entries()].map(([value, count]) => ({ value, count }));
+      if (def.order) {
+        options.sort((a, b) => def.order.indexOf(a.value) - def.order.indexOf(b.value));
+      } else {
+        options.sort(
+          (a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value)),
+        );
+      }
+      return [def.id, options];
+    }),
+  );
+}
 
 function moveColumn(order, fromId, toId) {
   if (!fromId || fromId === "item" || fromId === toId) return order;
@@ -637,19 +741,34 @@ function renderCell(columnId, item) {
             size={12}
             className="shrink-0 text-white/0 group-hover/row:text-white/35"
           />
-          <span className="truncate text-left text-[12px] font-medium leading-none text-white" title={item.name}>
-            {item.name}
+          <span
+            className={`truncate text-left text-[12px] font-medium leading-none ${
+              item.name?.trim() ? "text-white" : "text-white/35 italic"
+            }`}
+            title={item.name?.trim() || "Untitled ad"}
+          >
+            {item.name?.trim() || "Untitled ad"}
           </span>
         </div>
       );
     case "status":
-      return <StatusPill label={item.status} color={AD_STATUS_COLORS[item.status]} />;
+      return (
+        <StatusPill
+          label={item.status}
+          color={AD_STATUS_COLORS[item.status] || WD_STATUS_COLORS[item.status]}
+        />
+      );
     case "product":
       return <ProductCell name={item.product} />;
     case "priority":
       return <DotLabel label={item.priority} color={AD_PRIORITY_COLORS[item.priority]} />;
     case "editor":
+    case "owner":
       return <PersonCell names={item.editors} />;
+    case "type":
+      return <TintedText label={item.type} color={WD_TYPE_COLORS[item.type]} />;
+    case "link":
+      return <LinkableText value={item.link} />;
     case "angle":
       return <TintedText label={item.angle} color={AD_ANGLE_COLORS[item.angle]} />;
     case "due":
@@ -675,11 +794,92 @@ function renderCell(columnId, item) {
   }
 }
 
+function ItemNameCell({ item, renaming, onStartRename, onCommitRename }) {
+  const [draft, setDraft] = useState(item.name);
+  const inputRef = useRef(null);
+  const skipCommitRef = useRef(false);
+
+  useEffect(() => {
+    if (renaming) {
+      skipCommitRef.current = false;
+      setDraft(item.name);
+    }
+  }, [renaming, item.name]);
+
+  useEffect(() => {
+    if (!renaming) return;
+    const node = inputRef.current;
+    if (!node) return;
+    node.focus();
+    node.select();
+  }, [renaming]);
+
+  const commit = () => {
+    if (skipCommitRef.current) {
+      skipCommitRef.current = false;
+      onStartRename(null);
+      return;
+    }
+    const next = draft.trim();
+    if (next && next !== item.name) onCommitRename(item.id, next);
+    onStartRename(null);
+  };
+
+  return (
+    <div className="flex min-w-0 items-center justify-start gap-1.5 text-left">
+      <GripVertical
+        size={12}
+        className="shrink-0 text-white/0 group-hover/row:text-white/35"
+      />
+      {renaming ? (
+        <input
+          ref={inputRef}
+          data-command-interactive
+          value={draft}
+          aria-label="Ad name"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              skipCommitRef.current = true;
+              setDraft(item.name);
+              onStartRename(null);
+            }
+          }}
+          className="min-w-0 flex-1 bg-transparent py-0.5 text-[12px] font-medium leading-none text-white outline-none border-b border-white/35"
+        />
+      ) : (
+        <button
+          type="button"
+          data-command-interactive
+          title={`${item.name?.trim() || "Untitled ad"} — click to rename`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onStartRename(item.id);
+          }}
+          className={`min-w-0 truncate text-left text-[12px] font-medium leading-none ${
+            item.name?.trim() ? "text-white hover:text-white/90" : "text-white/35 italic"
+          }`}
+        >
+          {item.name?.trim() || "Untitled ad"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function cellAlign(columnId) {
   return CENTERED_COLS.has(columnId) ? "text-center" : "text-left";
 }
 
-function ColumnPicker({ order, hidden, onToggle, onReorder, onReset }) {
+function ColumnPicker({ order, hidden, onToggle, onReorder, onReset, columnsById = COLUMN_BY_ID }) {
   const [dragId, setDragId] = useState(null);
 
   return (
@@ -693,7 +893,7 @@ function ColumnPicker({ order, hidden, onToggle, onReorder, onReset }) {
       </p>
       <ul className="max-h-[320px] overflow-y-auto">
         {order.map((id) => {
-          const col = COLUMN_BY_ID[id];
+          const col = columnsById[id];
           if (!col) return null;
           const locked = col.hideable === false;
           const checked = locked || !hidden.includes(id);
@@ -758,8 +958,7 @@ function ColumnPicker({ order, hidden, onToggle, onReorder, onReset }) {
   );
 }
 
-function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear }) {
-  const options = FACET_OPTIONS[def.id] || [];
+function FacetFilter({ def, selected, open, onToggleOpen, onToggleValue, onClear, options = [] }) {
   const count = selected.length;
   return (
     <div className="relative flex-shrink-0">
@@ -873,6 +1072,9 @@ function AdProductionTable({
   openTask,
   closeTask,
   updateTask,
+  renamingId,
+  setRenamingId,
+  onAddTask,
 }) {
   const rowTdClass = (col, selected) => {
     const pinned = Boolean(col.pinned);
@@ -1171,14 +1373,23 @@ function AdProductionTable({
                             ),
                           }}
                         >
-                          <EditableBoardCell
-                            columnId={col.id}
-                            item={item}
-                            onPatch={updateTask}
-                            centered={CENTERED_COLS.has(col.id)}
-                          >
-                            {renderCell(col.id, item)}
-                          </EditableBoardCell>
+                          {col.id === "item" ? (
+                            <ItemNameCell
+                              item={item}
+                              renaming={renamingId === item.id}
+                              onStartRename={setRenamingId}
+                              onCommitRename={(id, name) => updateTask(id, { name })}
+                            />
+                          ) : (
+                            <EditableBoardCell
+                              columnId={col.id}
+                              item={item}
+                              onPatch={updateTask}
+                              centered={CENTERED_COLS.has(col.id)}
+                            >
+                              {renderCell(col.id, item)}
+                            </EditableBoardCell>
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -1186,6 +1397,7 @@ function AdProductionTable({
                 })}
               {open && (
                 <tr
+                  data-command-interactive
                   onDragOver={(e) => {
                     if (!draggingTask() || dragId) return;
                     e.preventDefault();
@@ -1222,6 +1434,11 @@ function AdProductionTable({
                     <button
                       type="button"
                       data-command-interactive
+                      aria-label={`Add new item to ${group.title}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddTask(group.id);
+                      }}
                       className="inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-white/25 hover:text-white/70 transition-colors"
                     >
                       <Plus size={11} />
@@ -1231,7 +1448,8 @@ function AdProductionTable({
                   {visibleColumns.length > 1 && (
                     <td
                       colSpan={visibleColumns.length - 1}
-                      className="h-9"
+                      className="h-9 cursor-pointer"
+                      onClick={() => onAddTask(group.id)}
                       style={{
                         boxShadow: withHairline(
                           taskDragId && taskDrop?.groupId === group.id && taskDrop.atEnd
@@ -1251,11 +1469,272 @@ function AdProductionTable({
   );
 }
 
+function kanbanStatusColor(item, board) {
+  return (
+    board?.statusColors?.[item.status] ||
+    AD_STATUS_COLORS[item.status] ||
+    WD_STATUS_COLORS[item.status]
+  );
+}
+
+function KanbanTaskCard({
+  item,
+  groupId,
+  board,
+  selected,
+  dragging,
+  dropBefore,
+  skipRowClickRef,
+  taskDragIdRef,
+  setTaskDragId,
+  setTaskDrop,
+  moveTask,
+  clearTaskDrag,
+  draggingTask,
+  openTask,
+  closeTask,
+}) {
+  const overdue = isOverdue(item);
+  const subtitle = item.type || item.angle;
+  const subtitleColor =
+    WD_TYPE_COLORS[item.type] ||
+    AD_PRODUCT_COLORS[item.product] ||
+    AD_ANGLE_COLORS[item.angle];
+
+  return (
+    <div
+      data-task-row={item.id}
+      data-command-interactive
+      draggable
+      aria-selected={selected}
+      onDragStart={(e) => {
+        if (e.target.closest("a, button, input, [role='separator']")) {
+          e.preventDefault();
+          return;
+        }
+        skipRowClickRef.current = true;
+        taskDragIdRef.current = item.id;
+        setTaskDragId(item.id);
+        e.dataTransfer.setData("text/plain", `task:${item.id}`);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        const draggingId = draggingTask();
+        if (!draggingId || draggingId === item.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "move";
+        setTaskDrop((prev) =>
+          prev?.groupId === groupId && prev.beforeId === item.id
+            ? prev
+            : { groupId, beforeId: item.id },
+        );
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = parseTaskDrag(e.dataTransfer.getData("text/plain")) || draggingTask();
+        if (id && id !== item.id) moveTask(id, groupId, item.id);
+        clearTaskDrag();
+      }}
+      onDragEnd={() => {
+        clearTaskDrag();
+        window.setTimeout(() => {
+          skipRowClickRef.current = false;
+        }, 0);
+      }}
+      onClick={(e) => {
+        if (e.target.closest("a, button, input, [role='separator']")) return;
+        if (skipRowClickRef.current) return;
+        if (selected) closeTask();
+        else openTask(item.id);
+      }}
+      title="Drag to another column"
+      className={`cursor-grab rounded-xl border p-2.5 text-left transition-colors active:cursor-grabbing ${
+        selected
+          ? "border-[#E8C4A0]/45 bg-white/[0.08]"
+          : "border-white/[0.08] bg-white/[0.03] hover:border-white/[0.16] hover:bg-white/[0.05]"
+      } ${dragging ? "opacity-40" : ""} ${
+        dropBefore ? "shadow-[inset_0_2px_0_0_rgba(255,255,255,0.7)]" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">
+          {item.name}
+        </p>
+        {item.priority ? (
+          <StatusPill label={item.priority} color={AD_PRIORITY_COLORS[item.priority]} />
+        ) : null}
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <StatusPill label={item.status} color={kanbanStatusColor(item, board)} />
+      </div>
+      <div className="mt-2 flex items-center gap-2 min-w-0">
+        {item.product ? <ProductCell name={item.product} /> : null}
+        {subtitle ? (
+          <span
+            className="truncate text-[11px] leading-none text-white/45"
+            style={subtitleColor ? { color: withAlpha(subtitleColor, 0.9) } : undefined}
+            title={subtitle}
+          >
+            {subtitle}
+          </span>
+        ) : null}
+        {item.platform ? <div className="ml-auto shrink-0"><PlatformCell value={item.platform} /></div> : null}
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-2">
+        <PersonCell names={item.editors} />
+        <DateCell iso={item.dueDate} overdue={overdue} />
+      </div>
+    </div>
+  );
+}
+
+function AdProductionKanban({
+  grouped,
+  board,
+  selectedTaskId,
+  taskDragId,
+  taskDrop,
+  skipRowClickRef,
+  taskDragIdRef,
+  setTaskDragId,
+  setTaskDrop,
+  dropTaskOnGroup,
+  clearTaskDrag,
+  draggingTask,
+  moveTask,
+  openTask,
+  closeTask,
+  onAddTask,
+}) {
+  const noun = board.nounPlural?.toLowerCase() || "items";
+
+  return (
+    <div className="flex h-full min-h-0 gap-3 overflow-x-auto overflow-y-hidden p-3">
+      {grouped.map((group) => {
+        const color = group.color || "#74747e";
+        const dropping =
+          Boolean(taskDragId) &&
+          taskDrop?.groupId === group.id &&
+          (taskDrop.atEnd || !taskDrop.beforeId);
+        return (
+          <section
+            key={group.id}
+            className="flex w-[272px] shrink-0 flex-col min-h-0 max-h-full rounded-xl border border-white/[0.08] bg-[#101114]"
+            onDragOver={(e) => {
+              if (!draggingTask()) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (e.target.closest("[data-task-row]")) return;
+              setTaskDrop((prev) =>
+                prev?.groupId === group.id && prev.atEnd
+                  ? prev
+                  : { groupId: group.id, atEnd: true },
+              );
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = parseTaskDrag(e.dataTransfer.getData("text/plain")) || draggingTask();
+              if (id) dropTaskOnGroup(group.id, null, id);
+              clearTaskDrag();
+            }}
+          >
+            <header
+              className="flex shrink-0 items-center gap-2 px-3 py-2.5"
+              style={{
+                backgroundColor: withAlpha(color, 0.12),
+                boxShadow: `inset 3px 0 0 ${color}`,
+              }}
+            >
+              <span
+                className="truncate text-[12px] font-semibold leading-none"
+                style={{ color }}
+              >
+                {group.title}
+              </span>
+              <span className="shrink-0 text-[10px] font-mono text-white/30">
+                {group.rows.length}
+              </span>
+            </header>
+            <div
+              className={`flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain px-2 py-2 ${
+                dropping ? "bg-white/[0.04]" : ""
+              }`}
+            >
+              {group.rows.length === 0 && (
+                <p className="px-1 py-6 text-center text-[11px] text-white/20">
+                  No {noun} in this phase.
+                </p>
+              )}
+              {group.rows.map((item) => (
+                <KanbanTaskCard
+                  key={item.id}
+                  item={item}
+                  groupId={group.id}
+                  board={board}
+                  selected={selectedTaskId === item.id}
+                  dragging={taskDragId === item.id}
+                  dropBefore={
+                    Boolean(taskDragId) &&
+                    taskDragId !== item.id &&
+                    taskDrop?.groupId === group.id &&
+                    taskDrop.beforeId === item.id
+                  }
+                  skipRowClickRef={skipRowClickRef}
+                  taskDragIdRef={taskDragIdRef}
+                  setTaskDragId={setTaskDragId}
+                  setTaskDrop={setTaskDrop}
+                  moveTask={moveTask}
+                  clearTaskDrag={clearTaskDrag}
+                  draggingTask={draggingTask}
+                  openTask={openTask}
+                  closeTask={closeTask}
+                />
+              ))}
+            </div>
+            <div className="shrink-0 border-t border-white/[0.06] px-2 py-1.5">
+              <button
+                type="button"
+                data-command-interactive
+                aria-label={`Add new item to ${group.title}`}
+                onClick={() => onAddTask(group.id)}
+                className="inline-flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] font-medium text-white/25 hover:bg-white/[0.04] hover:text-white/70 transition-colors"
+              >
+                <Plus size={11} />
+                Add new
+              </button>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CommandCenter() {
-  const { selectedTaskId, openTask, closeTask, boardItems, moveTask, updateTask } = useCommandCenter();
+  const {
+    selectedTaskId,
+    openTask,
+    closeTask,
+    activeBoardItems,
+    boardItems,
+    moveTask,
+    updateTask,
+    addTask,
+    activeBoardId,
+    setActiveBoardId,
+  } = useCommandCenter();
+  const board = getCommandBoard(activeBoardId);
+  const tableItems = activeBoardItems || boardItems;
+  const facetDefs = useMemo(() => facetDefsFor(board), [board]);
+  const facetOptions = useMemo(() => facetOptionsFor(board), [board]);
+  const columnsById = useMemo(() => columnMeta(board).byId, [board]);
+  const columnDefaults = useMemo(() => columnMeta(board), [board]);
   const [query, setQuery] = useState("");
-  const [openGroups, setOpenGroups] = useState(loadInitialOpenGroups);
-  const [{ order, hidden, widths }, setColumnState] = useState(loadColumnState);
+  const [boardView, setBoardView] = useState(() => loadBoardView(board.id));
+  const [openGroups, setOpenGroups] = useState(() => loadInitialOpenGroups(board));
+  const [{ order, hidden, widths }, setColumnState] = useState(() => loadColumnState(board));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersSettled, setFiltersSettled] = useState(false);
@@ -1269,16 +1748,41 @@ export default function CommandCenter() {
   const [facets, setFacets] = useState({});
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [openFacet, setOpenFacet] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [pinnedIds, setPinnedIds] = useState([]);
   const pickerRef = useRef(null);
   const filterRailRef = useRef(null);
+  const skipBoardReset = useRef(true);
+  const persistedBoardId = useRef(board.id);
 
   useEffect(() => {
+    if (skipBoardReset.current) {
+      skipBoardReset.current = false;
+      return;
+    }
+    setOpenGroups(loadInitialOpenGroups(board));
+    setColumnState(loadColumnState(board));
+    setBoardView(loadBoardView(board.id));
+    setFacets({});
+    setOverdueOnly(false);
+    setOpenFacet(null);
+    setQuery("");
+    setFiltersOpen(false);
+    setPickerOpen(false);
+    setRenamingId(null);
+  }, [board.id]);
+
+  useEffect(() => {
+    if (persistedBoardId.current !== board.id) {
+      persistedBoardId.current = board.id;
+      return;
+    }
     try {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({ order, hidden, widths }));
+      localStorage.setItem(columnStorageKey(board), JSON.stringify({ order, hidden, widths }));
     } catch {
       /* ignore quota / private mode */
     }
-  }, [order, hidden, widths]);
+  }, [board, order, hidden, widths]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -1328,7 +1832,7 @@ export default function CommandCenter() {
 
   useEffect(() => {
     if (!selectedTaskId) return;
-    const item = boardItems.find((row) => row.id === selectedTaskId);
+    const item = tableItems.find((row) => row.id === selectedTaskId);
     if (!item) return;
     setOpenGroups((prev) => {
       if (prev[item.phase]) return prev;
@@ -1340,7 +1844,17 @@ export default function CommandCenter() {
         ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, 60);
     return () => window.clearTimeout(t);
-  }, [selectedTaskId]);
+  }, [selectedTaskId, tableItems]);
+
+  useEffect(() => {
+    if (!renamingId) return;
+    const t = window.setTimeout(() => {
+      document
+        .querySelector(`[data-task-row="${renamingId}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [renamingId]);
 
   const hasActiveFilters =
     overdueOnly || Object.values(facets).some((values) => values?.length > 0);
@@ -1357,13 +1871,15 @@ export default function CommandCenter() {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return boardItems.filter((item) => {
+    return tableItems.filter((item) => {
+      if (pinnedIds.includes(item.id)) return true;
       if (
         q &&
         ![
           item.name,
           item.status,
           item.product,
+          item.type,
           item.editors?.join(" "),
           item.creativeStrategists?.join(" "),
           item.angle,
@@ -1371,6 +1887,8 @@ export default function CommandCenter() {
           item.platform,
           item.painPoint,
           item.adCopy,
+          item.summary,
+          item.link,
         ]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q))
@@ -1378,7 +1896,7 @@ export default function CommandCenter() {
         return false;
       }
       if (overdueOnly && !isOverdue(item)) return false;
-      for (const def of FACET_DEFS) {
+      for (const def of facetDefs) {
         const selected = facets[def.id];
         if (!selected?.length) continue;
         const values = def.values(item).filter(Boolean);
@@ -1386,15 +1904,24 @@ export default function CommandCenter() {
       }
       return true;
     });
-  }, [boardItems, query, facets, overdueOnly]);
+  }, [tableItems, query, facets, overdueOnly, pinnedIds, facetDefs]);
 
   const grouped = useMemo(
     () =>
-      AD_PHASES.map((phase) => ({
+      board.phases.map((phase) => ({
         ...phase,
         rows: items.filter((item) => item.phase === phase.id),
       })).filter((g) => g.rows.length > 0 || (!query.trim() && !hasActiveFilters)),
-    [items, query, hasActiveFilters],
+    [items, query, hasActiveFilters, board.phases],
+  );
+
+  const kanbanGrouped = useMemo(
+    () =>
+      board.phases.map((phase) => ({
+        ...phase,
+        rows: items.filter((item) => item.phase === phase.id),
+      })),
+    [items, board.phases],
   );
 
   const boardStats = useMemo(() => {
@@ -1430,10 +1957,10 @@ export default function CommandCenter() {
   const visibleColumns = useMemo(
     () =>
       order
-        .map((id) => COLUMN_BY_ID[id])
+        .map((id) => columnsById[id])
         .filter((col) => col && !hidden.includes(col.id))
         .map((col) => ({ ...col, width: widths?.[col.id] ?? col.width })),
-    [order, hidden, widths],
+    [order, hidden, widths, columnsById],
   );
 
   const tableMinWidth = visibleColumns.reduce((sum, col) => sum + col.width, 0);
@@ -1444,7 +1971,7 @@ export default function CommandCenter() {
   const setColWidth = (id, next) => {
     setColumnState((prev) => ({
       ...prev,
-      widths: { ...prev.widths, [id]: clampColWidth(COLUMN_BY_ID[id], next) },
+      widths: { ...prev.widths, [id]: clampColWidth(columnsById[id], next) },
     }));
   };
 
@@ -1471,7 +1998,7 @@ export default function CommandCenter() {
   };
 
   const toggleColumn = (id) => {
-    if (COLUMN_BY_ID[id]?.hideable === false) return;
+    if (columnsById[id]?.hideable === false) return;
     setHidden(hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id]);
   };
 
@@ -1498,11 +2025,36 @@ export default function CommandCenter() {
     setOpenGroups((prev) => ({ ...prev, [groupId]: willOpen }));
     if (willOpen) {
       try {
-        localStorage.setItem(OPEN_GROUP_STORAGE_KEY, groupId);
+        localStorage.setItem(openGroupStorageKey(board), groupId);
       } catch {
         /* ignore private mode */
       }
     }
+  };
+
+  const handleAddTask = (phaseId) => {
+    const created = addTask(phaseId);
+    if (!created) return;
+    setPinnedIds((prev) => (prev.includes(created.id) ? prev : [...prev, created.id]));
+    setOpenGroups((prev) => (prev[phaseId] ? prev : { ...prev, [phaseId]: true }));
+    openTask(created.id);
+    try {
+      localStorage.setItem(openGroupStorageKey(board), phaseId);
+    } catch {
+      /* ignore private mode */
+    }
+  };
+
+  const addPhaseId = phaseForNewTask(openGroups, board);
+  const addPhase = board.phases.find((p) => p.id === addPhaseId);
+  const newNoun = board.noun || "ad";
+  const ViewIcon = boardView === "kanban" ? LayoutGrid : Table2;
+
+  const selectBoardView = (view) => {
+    if (view !== "table" && view !== "kanban") return;
+    setBoardView(view);
+    persistBoardView(board.id, view);
+    if (view === "kanban") setPickerOpen(false);
   };
 
   return (
@@ -1518,20 +2070,43 @@ export default function CommandCenter() {
                 className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 h-[52px] px-3 rounded-2xl border border-[#E8C4A0]/20 bg-[#161618]/78 text-white/90 shadow-2xl backdrop-blur-xl"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <Table2 size={13} className="text-[#E8C4A0] shrink-0" />
+                  <ViewIcon size={13} className="text-[#E8C4A0] shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#E8C4A0]">
                       Command Center
                     </p>
-                    <h1 className="text-[13px] font-semibold text-white leading-tight whitespace-nowrap mt-0.5">
-                      Ad Production
-                    </h1>
+                    <div
+                      role="tablist"
+                      aria-label="Boards"
+                      className="mt-0.5 flex items-center gap-0.5 min-w-0"
+                    >
+                      {COMMAND_BOARDS.map((tab) => {
+                        const selected = tab.id === board.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            title={tab.label}
+                            onClick={() => setActiveBoardId(tab.id)}
+                            className={`truncate max-w-[160px] px-1.5 py-0.5 rounded-md text-[13px] font-semibold leading-tight transition-colors ${
+                              selected
+                                ? "text-white bg-white/[0.08]"
+                                : "text-white/40 hover:text-white/75"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="hidden sm:flex items-center gap-3">
                     <div className="leading-tight">
-                      <p className="text-[9px] font-semibold uppercase tracking-wider text-white/40">Ads</p>
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-white/40">{board.nounPlural}</p>
                       <p className="text-[13px] font-bold font-mono text-white tabular-nums">{boardStats.total}</p>
                     </div>
                     <div className="leading-tight">
@@ -1554,6 +2129,46 @@ export default function CommandCenter() {
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-1 min-w-0">
+                  <div
+                    role="tablist"
+                    aria-label="Board view"
+                    className="flex items-center rounded-full bg-white/[0.04] p-0.5"
+                  >
+                    {BOARD_VIEWS.map((view) => {
+                      const Icon = view.icon;
+                      const selected = boardView === view.id;
+                      return (
+                        <button
+                          key={view.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={selected}
+                          title={`${view.label} view`}
+                          onClick={() => selectBoardView(view.id)}
+                          className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-all duration-200 ${
+                            selected
+                              ? "bg-white/[0.12] text-white"
+                              : "text-white/40 hover:text-white hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          <Icon size={11} />
+                          <span className="hidden xl:inline">{view.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    title={addPhase ? `Add ${newNoun} to ${addPhase.title}` : `Add ${newNoun}`}
+                    onClick={() => {
+                      setPickerOpen(false);
+                      handleAddTask(addPhaseId);
+                    }}
+                    className={toolbarChip(false)}
+                  >
+                    <Plus size={12} />
+                    New {newNoun}
+                  </button>
                   <button
                     type="button"
                     aria-expanded={filtersOpen}
@@ -1573,6 +2188,7 @@ export default function CommandCenter() {
                       className={`transition-transform duration-300 ${filtersOpen ? "rotate-180" : ""}`}
                     />
                   </button>
+                  {boardView === "table" && (
                   <div className="relative" ref={pickerRef}>
                     <button
                       type="button"
@@ -1592,18 +2208,20 @@ export default function CommandCenter() {
                       <ColumnPicker
                         order={order}
                         hidden={hidden}
+                        columnsById={columnsById}
                         onToggle={toggleColumn}
                         onReorder={handleReorder}
                         onReset={() => {
                           setColumnState({
-                            order: DEFAULT_ORDER,
-                            hidden: DEFAULT_HIDDEN,
-                            widths: DEFAULT_WIDTHS,
+                            order: columnDefaults.order,
+                            hidden: columnDefaults.hidden,
+                            widths: columnDefaults.widths,
                           });
                         }}
                       />
                     )}
                   </div>
+                  )}
                 </div>
               </div>
 
@@ -1621,10 +2239,11 @@ export default function CommandCenter() {
                     data-command-interactive
                     className="flex flex-wrap items-center gap-0.5 mt-2 px-2 py-1.5 rounded-2xl border border-[#E8C4A0]/20 bg-[#161618]/78 text-white/90 shadow-2xl backdrop-blur-xl"
                   >
-                    {FACET_DEFS.map((def) => (
+                    {facetDefs.map((def) => (
                       <FacetFilter
                         key={def.id}
                         def={def}
+                        options={facetOptions[def.id] || []}
                         selected={facets[def.id] || []}
                         open={openFacet === def.id}
                         onToggleOpen={() =>
@@ -1660,7 +2279,7 @@ export default function CommandCenter() {
                         type="search"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Filter ads…"
+                        placeholder={`Filter ${board.nounPlural.toLowerCase()}…`}
                         className="w-[160px] xl:w-[200px] h-8 py-1.5 pl-7 pr-3 bg-transparent text-[12px] text-white placeholder:text-white/30 outline-none"
                       />
                     </div>
@@ -1670,9 +2289,31 @@ export default function CommandCenter() {
             </div>
 
             <div
-              className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain rounded-2xl border border-white/[0.14] bg-[#0a0b10]"
+              className={`flex-1 min-h-0 min-w-0 overscroll-contain rounded-2xl border border-white/[0.14] bg-[#0a0b10] ${
+                boardView === "kanban" ? "overflow-hidden" : "overflow-auto"
+              }`}
               data-command-canvas-scroll
             >
+              {boardView === "kanban" ? (
+                <AdProductionKanban
+                  grouped={kanbanGrouped}
+                  board={board}
+                  selectedTaskId={selectedTaskId}
+                  taskDragId={taskDragId}
+                  taskDrop={taskDrop}
+                  skipRowClickRef={skipRowClickRef}
+                  taskDragIdRef={taskDragIdRef}
+                  setTaskDragId={setTaskDragId}
+                  setTaskDrop={setTaskDrop}
+                  dropTaskOnGroup={dropTaskOnGroup}
+                  clearTaskDrag={clearTaskDrag}
+                  draggingTask={draggingTask}
+                  moveTask={moveTask}
+                  openTask={openTask}
+                  closeTask={closeTask}
+                  onAddTask={handleAddTask}
+                />
+              ) : (
               <AdProductionTable
                 grouped={grouped}
                 openGroups={openGroups}
@@ -1701,7 +2342,11 @@ export default function CommandCenter() {
                 openTask={openTask}
                 closeTask={closeTask}
                 updateTask={updateTask}
+                renamingId={renamingId}
+                setRenamingId={setRenamingId}
+                onAddTask={handleAddTask}
               />
+              )}
             </div>
           </div>
         </div>
