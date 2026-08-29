@@ -68,7 +68,7 @@ export default function Login() {
   };
 
   return (
-    <div className="login-stage lustrous-bg">
+    <div className="login-stage">
       <LiveWindow />
 
       <header className="login-crown">
