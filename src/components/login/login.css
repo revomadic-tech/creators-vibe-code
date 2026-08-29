@@ -172,131 +172,9 @@
   opacity: 0.7;
 }
 
-.login-live {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-}
-.login-live-interior {
-  position: absolute;
-  inset: 0;
-}
-.login-live-caption {
-  position: absolute;
-  right: 1.5rem;
-  bottom: 1.15rem;
-  margin: 0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(240, 239, 233, 0.42);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
-}
-
-.login-presence-card {
-  position: absolute;
-  height: auto;
-  aspect-ratio: 3 / 4;
-  border-radius: 1.15rem;
-  overflow: hidden;
-  background: #161618;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
-  animation: loginPresenceIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.login-presence-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 18%;
-  filter: contrast(1.04) saturate(1.08);
-}
-.login-presence-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.4rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.92);
-  filter: none;
-}
-.login-presence-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.12) 45%, transparent 100%);
-}
-.login-presence-meta {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.75rem 0.85rem 0.85rem;
-}
-.login-presence-role {
-  margin: 0;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(240, 239, 233, 0.5);
-}
-.login-presence-name {
-  margin: 0.1rem 0 0;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: #fff;
-}
-.login-presence-activity {
-  margin: 0.35rem 0 0;
-  font-size: 10px;
-  color: rgba(240, 239, 233, 0.45);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.login-presence-dot {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
-}
-.login-presence-dot--online {
-  background: var(--color-accent-teal);
-  animation: loginPulse 2s ease-in-out infinite;
-}
-.login-presence-dot--away {
-  background: #eab308;
-}
-
-@keyframes loginPresenceIn {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @keyframes loginFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes loginPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
 }
 
 @media (max-width: 900px) {
@@ -305,9 +183,6 @@
     padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
-  .login-presence-card {
-    width: 132px !important;
-  }
   .login-orb {
     min-width: 180px;
     flex: 1;
@@ -315,12 +190,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .login-presence-card,
   .login-statement,
   .login-orb-go .animate-spin {
     animation: none !important;
-  }
-  .login-presence-dot--online {
-    animation: none;
   }
 }
