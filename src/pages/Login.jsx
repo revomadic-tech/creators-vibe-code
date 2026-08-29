@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import LiveWindow from "../components/login/LiveWindow";
 import LoginOrbs from "../components/login/LoginOrbs";
 import { useLogin, formatError } from "../api/auth/hooks";
 import "../components/login/login.css";
@@ -69,8 +68,6 @@ export default function Login() {
 
   return (
     <div className="login-stage">
-      <LiveWindow />
-
       <header className="login-crown">
         <p className="login-wordmark">
           REVO <span>CREATE</span>
