@@ -49,6 +49,7 @@ export const COMMAND_BOARDS = [
     phases: AD_PHASES,
     columns: AD_BOARD_COLUMNS,
     seed: adProductionSeed,
+    defaultView: "table",
     columnStorageKey: "revo.commandCenter.boardColumns.v5",
     openGroupStorageKey: "revo.commandCenter.lastOpenGroup.v1",
     closedStatuses: new Set([
@@ -77,6 +78,7 @@ export const COMMAND_BOARDS = [
     phases: WD_PHASES,
     columns: WD_BOARD_COLUMNS,
     seed: productionsWebDevSeed,
+    defaultView: "kanban",
     columnStorageKey: "revo.commandCenter.webDevColumns.v1",
     openGroupStorageKey: "revo.commandCenter.webDev.lastOpenGroup.v1",
     closedStatuses: WD_CLOSED_STATUSES,

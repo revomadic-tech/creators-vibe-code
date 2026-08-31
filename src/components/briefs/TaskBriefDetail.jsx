@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Clock3,
+  ExternalLink,
   MessageSquare,
   SendHorizontal,
 } from "lucide-react";
@@ -162,6 +163,111 @@ function DateInput({ value, onChange, overdue }) {
   );
 }
 
+function LinkField({ value, onChange }) {
+  const [draft, setDraft] = useState(value || "");
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+  const href = draft.trim();
+  const openable = /^https?:\/\//i.test(href);
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <input
+        type="url"
+        data-command-interactive
+        value={draft}
+        placeholder="https://"
+        aria-label="Link"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = href || null;
+          if ((value || null) !== next) onChange(next);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        className="min-w-0 flex-1 bg-transparent text-[12.5px] text-stone-800 outline-none placeholder:text-stone-300"
+      />
+      {openable ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          data-command-interactive
+          className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-sky-700 hover:underline"
+        >
+          <ExternalLink size={11} />
+          Open
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function WebDevBriefPanel({ item, page = false }) {
+  const channelColors = { ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS };
+  const href = String(item.link || "").trim();
+  const openable = /^https?:\/\//i.test(href);
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl border border-stone-200/80 bg-[#FBF9F4] shadow-sm shadow-stone-900/[0.04] ${
+        page ? "min-h-[420px]" : ""
+      }`}
+    >
+      <div className="border-b border-stone-200/70 bg-white/70 px-5 py-2.5">
+        <p className="truncate font-serif text-[12px] text-stone-500">
+          Productions & Web Dev brief
+        </p>
+      </div>
+      <article
+        className={`mx-auto text-stone-800 ${page ? "max-w-[640px] px-10 py-10" : "max-w-[560px] px-6 py-7"}`}
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-400">
+          {[item.type, item.platform].filter(Boolean).join(" · ") || "Task brief"}
+        </p>
+        <h2 className={`mt-2 font-medium tracking-tight text-stone-900 ${page ? "text-[28px]" : "text-[22px]"}`}>
+          {item.name || "Untitled task"}
+        </h2>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {item.type ? <AdReadPill label={item.type} color={WD_TYPE_COLORS[item.type]} /> : null}
+          {item.platform ? (
+            <AdReadPill label={item.platform} color={channelColors[item.platform]} />
+          ) : null}
+          {item.product ? (
+            <AdReadPill label={item.product} color={AD_PRODUCT_COLORS[item.product]} />
+          ) : null}
+        </div>
+        <div className="mt-6">
+          <SectionLabel>Notes</SectionLabel>
+          {item.summary ? (
+            <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-stone-700">
+              {item.summary}
+            </p>
+          ) : (
+            <p className="text-[13px] italic text-stone-400">No notes on this task yet.</p>
+          )}
+        </div>
+        <div className="mt-6">
+          <SectionLabel>Link</SectionLabel>
+          {openable ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-sky-700 hover:underline"
+            >
+              {href.replace(/^https?:\/\//, "")}
+              <ExternalLink size={12} />
+            </a>
+          ) : (
+            <p className="text-[13px] italic text-stone-400">No link yet.</p>
+          )}
+        </div>
+      </article>
+    </div>
+  );
+}
+
 function MetaCell({ label, children }) {
   return (
     <div className="min-w-0 bg-white px-3 py-1.5">
@@ -270,8 +376,12 @@ export default function TaskBriefDetail({
   const boardPhases = webDev ? WD_PHASES : AD_PHASES;
   const statusOptions = webDev ? WD_STATUS_OPTIONS : AD_STATUS_OPTIONS;
   const statusColors = webDev ? { ...AD_STATUS_COLORS, ...WD_STATUS_COLORS } : AD_STATUS_COLORS;
+  const channelColors = { ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS };
   const timeline = useMemo(() => (item ? buildTimeline(item) : []), [item]);
-  const adminBrief = useMemo(() => (item ? resolveAdminBrief(item) : null), [item]);
+  const adminBrief = useMemo(
+    () => (item && !isWebDevItem(item) ? resolveAdminBrief(item) : null),
+    [item],
+  );
   const adCopyDoc = useMemo(
     () => (item ? resolveAdCopyDoc(item, adminBrief) : null),
     [item, adminBrief],
@@ -327,6 +437,8 @@ export default function TaskBriefDetail({
 
   const headerCols = page ? "sm:grid-cols-4" : "grid-cols-2 min-[480px]:grid-cols-4";
   const detailCols = page ? "sm:grid-cols-5" : "grid-cols-2 min-[480px]:grid-cols-5";
+  const webDevDetailCols = page ? "sm:grid-cols-2" : "grid-cols-1 min-[480px]:grid-cols-2";
+  const taskNoun = webDev ? "task" : "ad";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-stone-800">
@@ -341,8 +453,8 @@ export default function TaskBriefDetail({
                 data-command-interactive
                 autoFocus={!item.name?.trim()}
                 value={nameDraft}
-                placeholder="Untitled ad"
-                aria-label="Ad name"
+                placeholder={`Untitled ${taskNoun}`}
+                aria-label={webDev ? "Task name" : "Ad name"}
                 onChange={(e) => setNameDraft(e.target.value)}
                 onBlur={commitName}
                 onKeyDown={(e) => {
@@ -470,19 +582,14 @@ export default function TaskBriefDetail({
               </span>
             </MetaCell>
             {webDev ? (
-              <MetaCell label="Link">
-                {item.link ? (
-                  <a
-                    href={item.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-[12px] font-medium text-sky-700 hover:underline"
-                  >
-                    Open
-                  </a>
-                ) : (
-                  <span className="text-[12px] text-stone-400">—</span>
-                )}
+              <MetaCell label="Channel">
+                <EditablePill
+                  value={item.platform}
+                  options={WD_PLATFORM_OPTIONS}
+                  colors={channelColors}
+                  ariaLabel="Channel"
+                  onChange={(platform) => patch({ platform })}
+                />
               </MetaCell>
             ) : (
               <MetaCell label="Send date">
@@ -553,44 +660,37 @@ export default function TaskBriefDetail({
                 className="space-y-4"
               >
                 <section className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm shadow-stone-900/[0.03]">
-                  <div className={`grid ${detailCols} gap-px bg-stone-100/80`}>
-                    {webDev ? (
-                      <>
-                        <MetaCell label="Type">
-                          <EditablePill
-                            value={item.type}
-                            options={WD_TYPE_OPTIONS}
-                            colors={WD_TYPE_COLORS}
-                            ariaLabel="Type"
-                            onChange={(type) => patch({ type })}
-                          />
-                        </MetaCell>
-                        <MetaCell label="Channel">
-                          <EditablePill
-                            value={item.platform}
-                            options={WD_PLATFORM_OPTIONS}
-                            colors={{ ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS }}
-                            ariaLabel="Channel"
-                            onChange={(platform) => patch({ platform })}
-                          />
-                        </MetaCell>
+                  {webDev ? (
+                    <div className={`grid ${webDevDetailCols} gap-px bg-stone-100/80`}>
+                      <MetaCell label="Type">
+                        <EditablePill
+                          value={item.type}
+                          options={WD_TYPE_OPTIONS}
+                          colors={WD_TYPE_COLORS}
+                          ariaLabel="Type"
+                          onChange={(type) => patch({ type })}
+                        />
+                      </MetaCell>
+                      <MetaCell label="Channel">
+                        <EditablePill
+                          value={item.platform}
+                          options={WD_PLATFORM_OPTIONS}
+                          colors={channelColors}
+                          ariaLabel="Channel"
+                          onChange={(platform) => patch({ platform })}
+                        />
+                      </MetaCell>
+                      <div className="min-[480px]:col-span-2">
                         <MetaCell label="Link">
-                          {item.link ? (
-                            <a
-                              href={item.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="truncate text-[12px] font-medium text-sky-700 hover:underline"
-                            >
-                              {item.link.replace(/^https?:\/\//, "")}
-                            </a>
-                          ) : (
-                            <span className="text-[12px] text-stone-400">No link</span>
-                          )}
+                          <LinkField
+                            value={item.link}
+                            onChange={(link) => patch({ link })}
+                          />
                         </MetaCell>
-                      </>
-                    ) : (
-                      <>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`grid ${detailCols} gap-px bg-stone-100/80`}>
                         <MetaCell label="Angle">
                           <EditablePill
                             value={item.angle}
@@ -636,9 +736,8 @@ export default function TaskBriefDetail({
                             onChange={(performance) => patch({ performance })}
                           />
                         </MetaCell>
-                      </>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </section>
 
                 {webDev ? (
@@ -765,7 +864,9 @@ export default function TaskBriefDetail({
                 aria-labelledby={`${idPrefix}-tab-brief`}
               >
                 <PanelErrorBoundary>
-                  {adminBrief ? (
+                  {webDev ? (
+                    <WebDevBriefPanel item={item} page={page} />
+                  ) : adminBrief ? (
                     <AdminBriefPanel brief={adminBrief} page={page} idPrefix={idPrefix} />
                   ) : (
                     <p className="text-[12px] text-stone-400">No parent campaign brief on this task.</p>

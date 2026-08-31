@@ -44,7 +44,7 @@ import { APP_CONTENT_INSET } from "../components/layout/chrome";
 // where half the board was hidden.
 const COLUMN_STORAGE_KEY = "revo.commandCenter.boardColumns.v5";
 const OPEN_GROUP_STORAGE_KEY = "revo.commandCenter.lastOpenGroup.v1";
-const VIEW_STORAGE_KEY = "revo.commandCenter.boardView.v1";
+const VIEW_STORAGE_KEY = "revo.commandCenter.boardView.v2";
 const BOARD_VIEWS = [
   { id: "table", label: "Table", icon: Table2 },
   { id: "kanban", label: "Kanban", icon: LayoutGrid },
@@ -58,6 +58,10 @@ function openGroupStorageKey(board) {
   return board.openGroupStorageKey || OPEN_GROUP_STORAGE_KEY;
 }
 
+function defaultBoardView(boardId) {
+  return getCommandBoard(boardId).defaultView === "kanban" ? "kanban" : "table";
+}
+
 function loadBoardView(boardId) {
   try {
     const raw = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "null");
@@ -66,7 +70,7 @@ function loadBoardView(boardId) {
   } catch {
     /* ignore private mode */
   }
-  return "table";
+  return defaultBoardView(boardId);
 }
 
 function persistBoardView(boardId, view) {
@@ -545,11 +549,13 @@ function moveColumn(order, fromId, toId) {
   return next;
 }
 
-function StatusPill({ label, color }) {
+function StatusPill({ label, color, dense = false }) {
   if (!label) return <span className="text-white/20">—</span>;
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-full border px-2 py-[3px] text-[10px] font-semibold leading-none"
+      className={`inline-flex max-w-full items-center truncate rounded-full border font-semibold leading-none ${
+        dense ? "px-1.5 py-px text-[9px]" : "px-2 py-[3px] text-[10px]"
+      }`}
       style={{
         backgroundColor: color ? withAlpha(color, 0.16) : "rgba(255,255,255,0.06)",
         color: color || "rgba(255,255,255,0.7)",
@@ -1477,6 +1483,82 @@ function kanbanStatusColor(item, board) {
   );
 }
 
+function KanbanProductMark({ name }) {
+  const product = resolveBoardProduct(name);
+  const swatch = AD_PRODUCT_COLORS[name] || "#4b5563";
+  return (
+    <span
+      className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-white/15"
+      title={name}
+    >
+      {product?.thumbnail ? (
+        <img src={product.thumbnail} alt="" className="h-[86%] w-[86%] object-contain" />
+      ) : (
+        <span
+          className="flex h-full w-full items-center justify-center text-[8px] font-bold leading-none"
+          style={{ backgroundColor: swatch, color: contrastText(swatch) }}
+        >
+          {initials(name)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function KanbanPeople({ names }) {
+  const people = (names || []).filter(Boolean).map((name) => findWorkspaceUser(name) || { name });
+  if (people.length === 0) return null;
+  const shown = people.slice(0, 2);
+  const extra = people.length - shown.length;
+  const title = people.map((p) => p.name).join(", ");
+  return (
+    <div className="flex shrink-0 items-center -space-x-1" title={title}>
+      {shown.map((person) =>
+        person.avatar ? (
+          <img
+            key={person.id || person.name}
+            src={person.avatar}
+            alt=""
+            className="h-5 w-5 rounded-full object-cover ring-1 ring-white/15"
+          />
+        ) : (
+          <span
+            key={person.name}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-[8px] font-bold text-white/80 ring-1 ring-white/15"
+          >
+            {initials(person.name)}
+          </span>
+        ),
+      )}
+      {extra > 0 && (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-[8px] font-bold text-white/70 ring-1 ring-white/15">
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function KanbanPlatforms({ value }) {
+  const names = parsePlatforms(value);
+  if (names.length === 0) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5 text-white/50" title={names.join(" / ")}>
+      {names.map((name) => {
+        const mark = PLATFORM_MARKS[name];
+        if (!mark) {
+          return (
+            <span key={name} className="text-[9px] font-bold uppercase tracking-wide text-white/45">
+              {name.slice(0, 2)}
+            </span>
+          );
+        }
+        return <PlatformGlyph key={name} id={mark.id} className="h-3.5 w-3.5" />;
+      })}
+    </span>
+  );
+}
+
 function KanbanTaskCard({
   item,
   groupId,
@@ -1495,11 +1577,16 @@ function KanbanTaskCard({
   closeTask,
 }) {
   const overdue = isOverdue(item);
+  const due = formatDate(item.dueDate);
   const subtitle = item.type || item.angle;
   const subtitleColor =
     WD_TYPE_COLORS[item.type] ||
     AD_PRODUCT_COLORS[item.product] ||
     AD_ANGLE_COLORS[item.angle];
+  const priorityColor = AD_PRIORITY_COLORS[item.priority];
+  const priorityLabel = String(item.priority || "")
+    .replace(/\s*⚠️️?/g, "")
+    .trim();
 
   return (
     <div
@@ -1550,41 +1637,50 @@ function KanbanTaskCard({
         else openTask(item.id);
       }}
       title="Drag to another column"
-      className={`cursor-grab rounded-xl border p-2.5 text-left transition-colors active:cursor-grabbing ${
+      className={`cursor-grab rounded-xl glass-card px-2.5 py-2.5 text-left transition-[border-color,box-shadow] duration-200 active:cursor-grabbing ${
         selected
-          ? "border-[#E8C4A0]/45 bg-white/[0.08]"
-          : "border-white/[0.08] bg-white/[0.03] hover:border-white/[0.16] hover:bg-white/[0.05]"
+          ? "border-[#E8C4A0]/50 shadow-[0_0_0_1px_rgba(232,196,160,0.25)]"
+          : "hover:border-white/30"
       } ${dragging ? "opacity-40" : ""} ${
         dropBefore ? "shadow-[inset_0_2px_0_0_rgba(255,255,255,0.7)]" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">
+      <div className="flex items-start gap-2 min-w-0">
+        {item.product ? <KanbanProductMark name={item.product} /> : null}
+        <p className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug text-white line-clamp-2">
           {item.name}
         </p>
-        {item.priority ? (
-          <StatusPill label={item.priority} color={AD_PRIORITY_COLORS[item.priority]} />
+        {priorityLabel ? (
+          <StatusPill dense label={priorityLabel} color={priorityColor} />
         ) : null}
       </div>
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-1.5 min-w-0">
         <StatusPill label={item.status} color={kanbanStatusColor(item, board)} />
-      </div>
-      <div className="mt-2 flex items-center gap-2 min-w-0">
-        {item.product ? <ProductCell name={item.product} /> : null}
         {subtitle ? (
           <span
-            className="truncate text-[11px] leading-none text-white/45"
+            className="min-w-0 truncate text-[11px] leading-none text-white/45"
             style={subtitleColor ? { color: withAlpha(subtitleColor, 0.9) } : undefined}
             title={subtitle}
           >
             {subtitle}
           </span>
         ) : null}
-        {item.platform ? <div className="ml-auto shrink-0"><PlatformCell value={item.platform} /></div> : null}
       </div>
-      <div className="mt-2.5 flex items-center justify-between gap-2">
-        <PersonCell names={item.editors} />
-        <DateCell iso={item.dueDate} overdue={overdue} />
+      <div className="mt-2 flex items-center justify-between gap-2 min-w-0">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <KanbanPeople names={item.editors} />
+          <KanbanPlatforms value={item.platform} />
+        </span>
+        {due ? (
+          <span
+            className={`shrink-0 font-mono text-[11px] leading-none tabular-nums ${
+              overdue ? "text-rose-400" : "text-white/45"
+            }`}
+            title={item.dueDate}
+          >
+            {due}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -1611,7 +1707,7 @@ function AdProductionKanban({
   const noun = board.nounPlural?.toLowerCase() || "items";
 
   return (
-    <div className="flex h-full min-h-0 gap-3 overflow-x-auto overflow-y-hidden p-3">
+    <div className="flex h-full min-h-0 gap-2.5 overflow-x-auto overflow-y-hidden p-3">
       {grouped.map((group) => {
         const color = group.color || "#74747e";
         const dropping =
@@ -1621,7 +1717,11 @@ function AdProductionKanban({
         return (
           <section
             key={group.id}
-            className="flex w-[272px] shrink-0 flex-col min-h-0 max-h-full rounded-xl border border-white/[0.08] bg-[#101114]"
+            className="flex w-[272px] shrink-0 flex-col min-h-0 max-h-full rounded-xl border"
+            style={{
+              backgroundColor: withAlpha(color, 0.22),
+              borderColor: withAlpha(color, 0.4),
+            }}
             onDragOver={(e) => {
               if (!draggingTask()) return;
               e.preventDefault();
@@ -1641,9 +1741,9 @@ function AdProductionKanban({
             }}
           >
             <header
-              className="flex shrink-0 items-center gap-2 px-3 py-2.5"
+              className="flex shrink-0 items-center gap-2 px-2.5 py-2"
               style={{
-                backgroundColor: withAlpha(color, 0.12),
+                backgroundColor: withAlpha(color, 0.34),
                 boxShadow: `inset 3px 0 0 ${color}`,
               }}
             >
@@ -1658,9 +1758,8 @@ function AdProductionKanban({
               </span>
             </header>
             <div
-              className={`flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain px-2 py-2 ${
-                dropping ? "bg-white/[0.04]" : ""
-              }`}
+              className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain px-2 py-2"
+              style={dropping ? { backgroundColor: withAlpha(color, 0.28) } : undefined}
             >
               {group.rows.length === 0 && (
                 <p className="px-1 py-6 text-center text-[11px] text-white/20">
@@ -1693,7 +1792,10 @@ function AdProductionKanban({
                 />
               ))}
             </div>
-            <div className="shrink-0 border-t border-white/[0.06] px-2 py-1.5">
+            <div
+              className="shrink-0 px-1.5 py-1"
+              style={{ borderTop: `1px solid ${withAlpha(color, 0.16)}` }}
+            >
               <button
                 type="button"
                 data-command-interactive
