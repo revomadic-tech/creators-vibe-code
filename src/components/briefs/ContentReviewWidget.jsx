@@ -31,6 +31,23 @@ import {
   sampleViewer,
   simulateEditorReply,
 } from "../../lib/reviewPipelineSample";
+import {
+  commentTimestamp,
+  formatCommentTime,
+  formatCommentTimeFull,
+} from "../../lib/formatCommentTime";
+
+function CommentStamp({ note }) {
+  const raw = commentTimestamp(note);
+  const label = formatCommentTime(raw);
+  if (!label) return null;
+  const full = formatCommentTimeFull(raw);
+  return (
+    <span className="ml-1.5 font-medium text-stone-400" title={full || undefined}>
+      {label}
+    </span>
+  );
+}
 
 function initials(name) {
   return (name || "?")
@@ -463,6 +480,7 @@ export default function ContentReviewWidget({
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] font-semibold text-stone-800">
                           {note.author?.name || currentUser.name}
+                          <CommentStamp note={note} />
                         </p>
                         <p className="mt-0.5 text-[12.5px] leading-relaxed text-stone-700">
                           {note.body}
@@ -526,7 +544,7 @@ export default function ContentReviewWidget({
                         </span>
                       )}
                       <div className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-                        <p className="text-[11px] font-semibold text-stone-800">{name}</p>
+                        <p className="text-[11px] font-semibold text-stone-800">{name}<CommentStamp note={note} /></p>
                         <p className="mt-0.5 text-[12.5px] leading-relaxed text-stone-700">
                           {note.body}
                         </p>

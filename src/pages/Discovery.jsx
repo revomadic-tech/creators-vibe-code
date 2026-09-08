@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   Grid3X3,
@@ -25,24 +25,21 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import DetailPanel from "../components/layout/DetailPanel";
 import AssetCard from "../components/shared/AssetCard";
 import FolderTree from "../components/shared/FolderTree";
 import {
-  useGetContentById,
   useGetContentDiscoveryFeed,
-  useGetContentList,
   useMergedContentList,
 } from "../api/content/hooks";
 import { useGetGalleries } from "../api/content-gallery/hooks";
 import {
   mapContentAsset,
   mapDiscoveryProduct,
-  unwrapDetail,
   unwrapFeed,
   unwrapGalleries,
-  unwrapList,
 } from "../lib/mapContentAsset";
+import { useWidgets } from "../contexts/WidgetContext";
+import useAuth from "../hooks/useAuth";
 import {
   EMPTY_FEED,
   PAGE_SIZE,
@@ -75,6 +72,9 @@ const sortOptions = [
 
 export default function Discovery() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { onLogout } = useAuth();
+  const { openAsset, openGallery } = useWidgets();
   const [typeFilters, setTypeFilters] = useState([]);
   const [layout, setLayout] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
@@ -85,7 +85,6 @@ export default function Discovery() {
   const [folderHidden, setFolderHidden] = useState(true);
   const [page, setPage] = useState(0);
 
-  const assetIdParam = searchParams.get("assetId");
   const productFilter = searchParams.get("product") || "";
   const categoryFilter = searchParams.get("tag") || searchParams.get("category") || "";
 
@@ -129,6 +128,7 @@ export default function Discovery() {
     data: feedResp,
     isLoading: feedLoading,
     isError: feedError,
+    error: feedErr,
     refetch: refetchFeed,
   } = useGetContentDiscoveryFeed();
   const feed = unwrapFeed(feedResp) || EMPTY_FEED;
@@ -182,37 +182,23 @@ export default function Discovery() {
     isLoading: listLoading,
     isFetching: listFetching,
     isError: listError,
+    error: listErr,
     refetch: refetchList,
   } = useMergedContentList(listPayload, queryProductIds);
   const loadError = feedError || listError;
+  const sessionExpired = [feedErr, listErr].some((err) => {
+    const status = err?.response?.status;
+    return status === 401 || status === 403;
+  });
   const retryLoad = useCallback(() => {
     refetchFeed();
     refetchList?.();
   }, [refetchFeed, refetchList]);
+  const signInAgain = useCallback(() => {
+    onLogout();
+    navigate("/login", { replace: true });
+  }, [navigate, onLogout]);
   const totalPages = totalPagesRaw || 1;
-
-  const deepLinkId = assetIdParam && !Number.isNaN(Number(assetIdParam))
-    ? Number(assetIdParam)
-    : null;
-  const { data: detailResp } = useGetContentById(deepLinkId);
-  const selectedAsset =
-    (deepLinkId && filteredAssets.find((a) => a.id === deepLinkId)) ||
-    (deepLinkId ? unwrapDetail(detailResp) : null);
-
-  const relatedPayload = useMemo(
-    () => ({
-      page: "1",
-      size: "5",
-      sort: "date",
-      ...(selectedAsset?.productId
-        ? { productId: String(selectedAsset.productId) }
-        : {}),
-    }),
-    [selectedAsset]
-  );
-  const { data: relatedResp } = useGetContentList(relatedPayload, {
-    enabled: Boolean(selectedAsset?.productId),
-  });
 
   const hasActiveFilters =
     typeFilters.length > 0 ||
@@ -268,8 +254,10 @@ export default function Discovery() {
         galleryTitle: node.label,
         ids: node.assetIds || [],
       });
+      const g = liveGalleries.find((x) => String(x.id) === String(node.value));
+      if (g) openGallery(g);
     }
-  }, [setProductFilter, setCategoryFilter]);
+  }, [setProductFilter, setCategoryFilter, liveGalleries, openGallery]);
 
   const clearAll = useCallback(() => {
     setPage(0);
@@ -279,25 +267,6 @@ export default function Discovery() {
     setFolderMeta(null);
     setSelectedFolderId("all");
   }, [setProductFilter, setCategoryFilter]);
-
-  const openAsset = useCallback(
-    (asset) => {
-      patchParams((next) => {
-        next.set("assetId", String(asset.id));
-      });
-    },
-    [patchParams]
-  );
-
-  const closeAsset = useCallback(() => {
-    patchParams((next) => {
-      next.delete("assetId");
-    });
-  }, [patchParams]);
-
-  const relatedAssets = unwrapList(relatedResp).items.filter(
-    (a) => a.id !== selectedAsset?.id
-  ).slice(0, 4);
 
   const currentSort = sortOptions.find((s) => s.value === sortBy);
 
@@ -650,17 +619,21 @@ export default function Discovery() {
                   {loadError ? (
                     <>
                       <p className="text-sm text-white/25 font-medium">
-                        Couldn’t load the library
+                        {sessionExpired
+                          ? "Session expired"
+                          : "Couldn’t load the library"}
                       </p>
                       <p className="text-xs text-white/12 mt-1 mb-3">
-                        The content API didn’t respond. Retry in a moment.
+                        {sessionExpired
+                          ? "Sign in again to load the content library."
+                          : "The content API didn’t respond. Retry in a moment."}
                       </p>
                       <button
                         type="button"
-                        onClick={retryLoad}
+                        onClick={sessionExpired ? signInAgain : retryLoad}
                         className="px-4 py-2 text-xs font-medium text-accent-red bg-accent-red/8 border border-accent-red/15 rounded-xl hover:bg-accent-red/12 transition-all duration-200"
                       >
-                        Retry
+                        {sessionExpired ? "Sign in" : "Retry"}
                       </button>
                     </>
                   ) : (
@@ -710,16 +683,6 @@ export default function Discovery() {
           </div>
         </div>
       </div>
-
-      {selectedAsset && (
-        <DetailPanel
-          item={selectedAsset}
-          type="asset"
-          onClose={closeAsset}
-          relatedAssets={relatedAssets}
-          onSelectRelated={openAsset}
-        />
-      )}
     </>
   );
 }
@@ -918,9 +881,7 @@ function ProductCollectionSlider({
         <button
           type="button"
           onClick={() => scroll(-1)}
-          className={`absolute left-0 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center ${
-            compact ? "top-1/2 -translate-y-1/2" : "top-8 -translate-y-1/2"
-          }`}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center"
           aria-label="Previous products"
         >
           <ArrowLeft size={12} />
@@ -930,9 +891,7 @@ function ProductCollectionSlider({
         <button
           type="button"
           onClick={() => scroll(1)}
-          className={`absolute right-0 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center ${
-            compact ? "top-1/2 -translate-y-1/2" : "top-8 -translate-y-1/2"
-          }`}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/60 border border-white/10 text-white/80 hover:text-white hover:bg-black/80 flex items-center justify-center"
           aria-label="Next products"
         >
           <ArrowRight size={12} />
@@ -964,7 +923,7 @@ function ProductCollectionSlider({
                 selected ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"
               }`}
             >
-              <ProductThumbStack product={product} size={28} compact selected={selected} />
+              <ProductThumbStack product={product} size={28} selected={selected} />
               <span
                 className={`text-[11px] font-bold tracking-wide leading-none whitespace-nowrap ${
                   selected ? "text-white" : "text-white/70 group-hover:text-white"
@@ -978,23 +937,12 @@ function ProductCollectionSlider({
               key={product.id}
               type="button"
               onClick={() => onSelectProduct(product)}
-              title={product.tagline}
+              title={product.name}
+              aria-label={product.name}
               aria-pressed={selected}
-              className="flex-shrink-0 min-w-[88px] group flex flex-col items-center gap-2 cursor-pointer"
+              className="flex-shrink-0 inline-flex group cursor-pointer"
             >
               <ProductThumbStack product={product} size={72} selected={selected} />
-              <span className="w-full text-center">
-                <span className="block text-[11px] font-bold text-white tracking-wide leading-none truncate">
-                  {product.name}
-                </span>
-                <span
-                  className={`block text-[9px] mt-1 truncate ${
-                    selected ? "text-accent-red/80" : "text-white/35"
-                  }`}
-                >
-                  {product.tagline}
-                </span>
-              </span>
             </button>
           );
         })}
@@ -1003,16 +951,19 @@ function ProductCollectionSlider({
   );
 }
 
-function ProductThumbStack({ product, size = 72, compact = false, selected = false }) {
+function ProductThumbStack({ product, size = 72, selected = false }) {
   const variants = (product.variants || []).filter((v) => v.thumbnail);
-  const peek = variants.slice(0, 3);
+  const thumb = product.thumbnail || variants[0]?.thumbnail || "";
+  const peek = variants.filter((v) => v.thumbnail && v.thumbnail !== thumb).slice(0, 3);
   const offset = Math.max(6, Math.round(size * 0.12));
   const peekScale = 0.78;
   const frame = size + (peek.length ? offset * Math.min(peek.length, 2) : 0);
 
+  if (!thumb) return null;
+
   return (
     <span
-      className="relative flex-shrink-0"
+      className="relative block flex-shrink-0"
       style={{ width: frame, height: size }}
     >
       {peek.map((variant, i) => {
@@ -1021,7 +972,7 @@ function ProductThumbStack({ product, size = 72, compact = false, selected = fal
         return (
           <span
             key={variant.id}
-            className="absolute rounded-full bg-white overflow-hidden ring-1 ring-white/20 opacity-80"
+            className="absolute opacity-80"
             style={{
               width: peekSize,
               height: peekSize,
@@ -1033,17 +984,15 @@ function ProductThumbStack({ product, size = 72, compact = false, selected = fal
             <img
               src={variant.thumbnail}
               alt=""
-              className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+              className="absolute inset-0 w-full h-full object-contain img-product"
               loading="lazy"
             />
           </span>
         );
       })}
       <span
-        className={`absolute rounded-full bg-white overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-105 ${
-          selected
-            ? "ring-2 ring-accent-red/80"
-            : "ring-1 ring-white/15 group-hover:ring-white/35"
+        className={`absolute transition-transform duration-300 group-hover:scale-105 ${
+          selected ? "ring-2 ring-accent-red/80 rounded-full" : ""
         }`}
         style={{
           width: size,
@@ -1054,19 +1003,11 @@ function ProductThumbStack({ product, size = 72, compact = false, selected = fal
         }}
       >
         <img
-          src={product.thumbnail}
+          src={thumb}
           alt={product.name}
-          className="absolute inset-[8%] w-[84%] h-[84%] object-contain"
+          className="absolute inset-0 w-full h-full object-contain img-product"
           loading="lazy"
         />
-        {!compact && (
-          <span
-            className="absolute bottom-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none"
-            style={{ backgroundColor: product.color }}
-          >
-            {product.assetCount}
-          </span>
-        )}
       </span>
     </span>
   );

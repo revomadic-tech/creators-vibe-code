@@ -26,7 +26,6 @@ import {
 import { StatusBadge, PriorityBadge } from "../ui/Tag";
 import MetadataRow from "../ui/MetadataRow";
 import ProgressBar from "../ui/ProgressBar";
-import { adminDiscoveryUrl } from "../../config";
 
 export default function DetailPanel({
   item,
@@ -35,6 +34,7 @@ export default function DetailPanel({
   onOpenFull,
   relatedAssets,
   onSelectRelated,
+  embedded = false,
 }) {
   const isAsset = type === "asset";
   const navigate = useNavigate();
@@ -48,9 +48,10 @@ export default function DetailPanel({
   );
 
   useEffect(() => {
+    if (embedded) return undefined;
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, [embedded, handleKeyDown]);
 
   if (!item) return null;
 
@@ -69,20 +70,11 @@ export default function DetailPanel({
 
   const panelWidth = isAsset && railOpen ? 880 : 560;
 
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/20 pointer-events-none" />
-      <div
-        className="fixed right-6 top-1/2 -translate-y-1/2 h-[88vh] rounded-2xl glass-panel z-50 flex slide-in-right shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden"
-        style={{
-          width: panelWidth,
-          transition: "width 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-        }}
-      >
-        {/* Main column */}
-        <div className="flex-1 min-w-0 flex flex-col">
+  const inner = (
+    <div className="flex-1 min-w-0 flex h-full">
+        <div className="flex-1 min-w-0 flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 h-12 border-b border-white/[0.06] flex-shrink-0">
+          <div className={`flex items-center justify-between px-4 h-12 border-b border-white/[0.06] flex-shrink-0 ${embedded ? "pr-11" : ""}`}>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-white/25 uppercase tracking-wider font-semibold">
                 {isAsset ? "Asset" : "Brief"}
@@ -110,26 +102,17 @@ export default function DetailPanel({
                   )}
                 </button>
               )}
-              <button
-                onClick={
-                  onOpenFull ||
-                  (isAsset ? undefined : () => goToBrief(item.id))
-                }
-                className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
-                title="Open full view"
-              >
-                <Maximize2 size={13} />
-              </button>
-              {isAsset && (
-                <a
-                  href={adminDiscoveryUrl(item.id)}
-                  target="_blank"
-                  rel="noreferrer"
+              {!embedded && (
+                <button
+                  onClick={
+                    onOpenFull ||
+                    (isAsset ? undefined : () => goToBrief(item.id))
+                  }
                   className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
-                  title="Open in Admin"
+                  title="Open full view"
                 >
-                  <ExternalLink size={13} />
-                </a>
+                  <Maximize2 size={13} />
+                </button>
               )}
               <button
                 onClick={() => {
@@ -141,20 +124,24 @@ export default function DetailPanel({
               >
                 <Copy size={13} />
               </button>
-              <button
-                className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
-                title="Share"
-              >
-                <Share2 size={13} />
-              </button>
-              <div className="w-px h-3.5 bg-white/[0.06] mx-0.5" />
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
-                title="Close (Esc)"
-              >
-                <X size={14} />
-              </button>
+              {!embedded && (
+                <>
+                  <button
+                    className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
+                    title="Share"
+                  >
+                    <Share2 size={13} />
+                  </button>
+                  <div className="w-px h-3.5 bg-white/[0.06] mx-0.5" />
+                  <button
+                    onClick={onClose}
+                    className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-200"
+                    title="Close (Esc)"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -189,38 +176,39 @@ export default function DetailPanel({
           {/* Footer CTA */}
           <div className="px-4 py-3 border-t border-white/[0.06] flex-shrink-0 flex items-center gap-2">
             {isAsset ? (
-              <a
-                href={adminDiscoveryUrl(item.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
-              >
-                <ExternalLink size={14} />
-                Open in Admin
-              </a>
+              item.downloadUrl ? (
+                <a
+                  href={item.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/50 hover:text-white/80 text-[13px] font-semibold transition-all duration-200 flex items-center justify-center gap-2"
+                  title="Download"
+                >
+                  <Download size={15} />
+                  Download
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/50 hover:text-white/80 text-[13px] font-semibold transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <Download size={15} />
+                  Download
+                </button>
+              )
             ) : (
-              <button
-                onClick={onOpenFull || (() => goToBrief(item.id))}
-                className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
-              >
-                <ExternalLink size={14} />
-                Open Full Brief
-              </button>
-            )}
-            {isAsset && item.downloadUrl ? (
-              <a
-                href={item.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200"
-                title="Download"
-              >
-                <Download size={15} />
-              </a>
-            ) : (
-              <button className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200">
-                <Download size={15} />
-              </button>
+              <>
+                <button
+                  onClick={onOpenFull || (() => goToBrief(item.id))}
+                  className="flex-1 py-2.5 bg-accent-red hover:bg-accent-red/90 text-white text-[13px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  <ExternalLink size={14} />
+                  Open Full Brief
+                </button>
+                <button className="p-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] hover:border-white/[0.08] rounded-xl text-white/35 hover:text-white/70 transition-all duration-200">
+                  <Download size={15} />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -229,6 +217,22 @@ export default function DetailPanel({
         {isAsset && (
           <FieldRail item={item} open={railOpen} />
         )}
+    </div>
+  );
+
+  if (embedded) return inner;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20 pointer-events-none" />
+      <div
+        className="fixed right-6 top-1/2 -translate-y-1/2 h-[88vh] rounded-2xl glass-panel z-50 flex slide-in-right shadow-2xl shadow-black/45 border border-white/[0.08] overflow-hidden"
+        style={{
+          width: panelWidth,
+          transition: "width 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
+        {inner}
       </div>
     </>
   );

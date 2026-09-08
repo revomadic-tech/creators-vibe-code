@@ -6,9 +6,10 @@ import {
   Layers,
   FileText,
   ExternalLink,
-  Clock,
 } from "lucide-react";
 import { StatusBadge } from "../ui/Tag";
+import ArcShare, { assetArcTarget } from "./ArcShare";
+import { useWidgets } from "../../contexts/WidgetContext";
 
 const typeColors = {
   Photo: "bg-accent-blue",
@@ -50,6 +51,12 @@ export default function AssetCard({
   variant = "default",
   showOverlay = true,
 }) {
+  const { openCreateGallery } = useWidgets();
+  const handleQuickAction = (action, item) => {
+    if (action === "gallery") openCreateGallery([item.id]);
+    onQuickAction?.(action, item);
+  };
+
   if (variant === "list") return <AssetListRow asset={asset} onClick={onClick} />;
   if (variant === "featured") return <AssetFeatured asset={asset} onClick={onClick} />;
   if (variant === "mini") return <AssetMini asset={asset} onClick={onClick} />;
@@ -74,6 +81,11 @@ export default function AssetCard({
             : "aspect-[4/3]"
         }`}
       >
+        <ArcShare
+          tone="dark"
+          className={isCompact ? "z-30 scale-75 origin-top-right" : "z-30"}
+          target={assetArcTarget(asset)}
+        />
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -89,7 +101,7 @@ export default function AssetCard({
               <div className={`h-full ${typeColors[asset.type] || "bg-white/20"} opacity-50`} />
             </div>
 
-            <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between">
+            <div className="absolute top-2.5 left-2.5 right-9 flex items-center justify-between">
               <FileExtBadge asset={asset} />
               <div className="flex items-center gap-1">
                 {asset.editorNeeded && (
@@ -124,7 +136,7 @@ export default function AssetCard({
                     key={btn.action}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onQuickAction?.(btn.action, asset);
+                      handleQuickAction(btn.action, asset);
                     }}
                     className="p-1.5 rounded-lg bg-white/10 backdrop-blur-md text-white/70 hover:bg-white/25 hover:text-white transition-all duration-200"
                     title={btn.title}
@@ -194,6 +206,7 @@ function AssetHero({ asset, onClick }) {
       className="group relative rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer col-span-2 row-span-2"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
+        <ArcShare tone="dark" className="z-30" target={assetArcTarget(asset)} />
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -202,7 +215,7 @@ function AssetHero({ asset, onClick }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
 
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+        <div className="absolute top-3 left-3 right-9 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <FileExtBadge asset={asset} className="rounded-md text-[9px]" />
             {asset.isNew && (
@@ -282,6 +295,7 @@ function AssetCinematic({ asset, onClick }) {
       className="group relative rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
     >
       <div className="relative aspect-[2/1] overflow-hidden">
+        <ArcShare tone="dark" className="z-30" target={assetArcTarget(asset)} />
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -290,7 +304,7 @@ function AssetCinematic({ asset, onClick }) {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
 
-        <div className="absolute top-2.5 right-2.5 card-quick-actions flex items-center gap-0.5">
+        <div className="absolute top-2.5 right-9 card-quick-actions flex items-center gap-0.5">
           <button className="p-1.5 rounded-lg bg-white/10 backdrop-blur-md text-white/60 hover:bg-white/25 hover:text-white transition-all duration-200">
             <Heart size={11} />
           </button>
@@ -331,9 +345,14 @@ function AssetMini({ asset, onClick }) {
   return (
     <div
       onClick={() => onClick?.(asset)}
-      className="group rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
+      className="group relative rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
     >
       <div className="relative aspect-[4/3] overflow-hidden">
+        <ArcShare
+          tone="dark"
+          className="z-30 scale-75 origin-top-right"
+          target={assetArcTarget(asset)}
+        />
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -398,9 +417,10 @@ function AssetFeatured({ asset, onClick }) {
   return (
     <div
       onClick={() => onClick?.(asset)}
-      className="flex-shrink-0 w-72 group rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
+      className="flex-shrink-0 w-72 group relative rounded-2xl overflow-hidden glass-card card-focus-ring cursor-pointer"
     >
       <div className="relative aspect-[16/9] overflow-hidden">
+        <ArcShare tone="dark" className="z-30" target={assetArcTarget(asset)} />
         <img
           src={asset.thumbnail}
           alt={asset.title}
@@ -408,7 +428,7 @@ function AssetFeatured({ asset, onClick }) {
           loading="lazy"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/5" />
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between">
+        <div className="absolute top-2.5 left-2.5 right-9 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {asset.isNew && (
               <span className="px-1.5 py-0.5 bg-accent-red/90 rounded text-[8px] font-bold text-white uppercase tracking-widest">

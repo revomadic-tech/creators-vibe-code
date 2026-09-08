@@ -16,6 +16,14 @@ import {
   AD_PRODUCT_COLORS,
   AD_STATUS_COLORS,
 } from "../../data/adProduction";
+import {
+  WD_PLATFORM_COLORS,
+  WD_PLATFORM_OPTIONS,
+  WD_STATUS_COLORS,
+  WD_STATUS_OPTIONS,
+  WD_TYPE_COLORS,
+  WD_TYPE_OPTIONS,
+} from "../../data/productionsWebDev";
 import { teamMembers } from "../../data/mockData";
 
 const PEOPLE_OPTIONS = teamMembers.map((m) => ({
@@ -24,14 +32,23 @@ const PEOPLE_OPTIONS = teamMembers.map((m) => ({
 }));
 
 export const BOARD_COLUMN_EDIT = {
-  status: { key: "status", options: AD_STATUS_OPTIONS, colors: AD_STATUS_COLORS },
+  status: {
+    key: "status",
+    options: [...AD_STATUS_OPTIONS, ...WD_STATUS_OPTIONS.filter((s) => !AD_STATUS_COLORS[s])],
+    colors: { ...AD_STATUS_COLORS, ...WD_STATUS_COLORS },
+  },
   product: { key: "product", options: AD_PRODUCT_OPTIONS, colors: AD_PRODUCT_COLORS },
   priority: { key: "priority", options: AD_PRIORITY_OPTIONS, colors: AD_PRIORITY_COLORS },
   editor: { key: "editors", people: true },
+  owner: { key: "editors", people: true },
   angle: { key: "angle", options: AD_ANGLE_OPTIONS, colors: AD_ANGLE_COLORS },
   due: { key: "dueDate", date: true },
   style: { key: "editingStyle", options: AD_EDITING_STYLE_OPTIONS, colors: AD_EDITING_STYLE_COLORS },
-  platform: { key: "platform", options: AD_PLATFORM_OPTIONS, colors: AD_PLATFORM_COLORS },
+  platform: {
+    key: "platform",
+    options: [...AD_PLATFORM_OPTIONS, ...WD_PLATFORM_OPTIONS.filter((s) => !AD_PLATFORM_COLORS[s])],
+    colors: { ...AD_PLATFORM_COLORS, ...WD_PLATFORM_COLORS },
+  },
   painPoint: { key: "painPoint", options: AD_PAIN_POINT_OPTIONS, colors: AD_PAIN_POINT_COLORS },
   strategist: { key: "creativeStrategists", people: true },
   sendDate: { key: "sendDate", date: true },
@@ -40,6 +57,7 @@ export const BOARD_COLUMN_EDIT = {
     options: AD_PERFORMANCE_OPTIONS,
     colors: AD_PERFORMANCE_COLORS,
   },
+  type: { key: "type", options: WD_TYPE_OPTIONS, colors: WD_TYPE_COLORS },
 };
 
 function optionList(options, colors) {

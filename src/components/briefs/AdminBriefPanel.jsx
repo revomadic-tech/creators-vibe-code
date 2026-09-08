@@ -328,7 +328,7 @@ export default function AdminBriefPanel({ brief, page = false, idPrefix = "brief
       ) : null}
 
       <p className="px-1 text-[11px] text-stone-400" id={`${idPrefix}-admin-sync`}>
-        This is the parent campaign brief. Task-specific copy and fields live on Task Details — submissions are reviewed as Content cards.
+        Admin is the source of truth. Carry out the units on Create; reviewers decide on Review Pipeline.
       </p>
     </div>
   );
