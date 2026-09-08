@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "higgsfield": {
+      "enabled": true
+    },
+    "railway": {
+      "enabled": true
+    }
+  }
+}

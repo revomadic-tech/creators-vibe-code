@@ -1,5 +1,18 @@
 import { Image, Share2, Lock, Clock } from "lucide-react";
 import { Tag } from "../ui/Tag";
+import ArcShare, { galleryArcTarget } from "./ArcShare";
+
+function PrivacyBadge({ shared }) {
+  return shared ? (
+    <span className="flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded-md text-[9px] text-white/60">
+      <Share2 size={9} /> Shared
+    </span>
+  ) : (
+    <span className="flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded-md text-[9px] text-white/60">
+      <Lock size={9} /> Private
+    </span>
+  );
+}
 
 export default function GalleryCard({ gallery, onClick, variant = "default", active }) {
   if (variant === "compact") return <CompactGallery gallery={gallery} onClick={onClick} />;
@@ -7,12 +20,13 @@ export default function GalleryCard({ gallery, onClick, variant = "default", act
   return (
     <div
       onClick={onClick}
-      className={`group rounded-2xl overflow-hidden glass-card card-hover cursor-pointer transition-all duration-200 ${
+      className={`group relative rounded-2xl overflow-hidden glass-card card-hover cursor-pointer transition-all duration-200 ${
         active
           ? "ring-2 ring-accent-red/40 border-accent-red/20"
           : ""
       }`}
     >
+      <ArcShare tone="dark" className="z-30" target={galleryArcTarget(gallery)} />
       <div className="relative h-44 overflow-hidden">
         <div className="grid grid-cols-2 grid-rows-2 gap-[1px] h-full bg-surface-600">
           {(gallery.coverImages || []).slice(0, 4).map((img, i) => (
@@ -29,16 +43,8 @@ export default function GalleryCard({ gallery, onClick, variant = "default", act
           ))}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-surface-700 via-transparent to-transparent" />
-        <div className="absolute top-2.5 right-2.5">
-          {gallery.isShared ? (
-            <span className="flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded-md text-[9px] text-white/60">
-              <Share2 size={9} /> Shared
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded-md text-[9px] text-white/60">
-              <Lock size={9} /> Private
-            </span>
-          )}
+        <div className="absolute top-2.5 right-11">
+          <PrivacyBadge shared={gallery.isShared} />
         </div>
       </div>
 
@@ -89,8 +95,9 @@ function CompactGallery({ gallery, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="group rounded-2xl overflow-hidden glass-card card-hover cursor-pointer"
+      className="group relative rounded-2xl overflow-hidden glass-card card-hover cursor-pointer"
     >
+      <ArcShare tone="dark" className="z-30" target={galleryArcTarget(gallery)} />
       <div className="relative h-24 overflow-hidden">
         <div className="grid grid-cols-2 gap-[1px] h-full bg-surface-600">
           {(gallery.coverImages || []).slice(0, 2).map((img, i) =>

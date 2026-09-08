@@ -11,9 +11,13 @@ import {
   ChevronUp,
   X,
   Clock,
+  Plus,
+  ListTodo,
 } from "lucide-react";
 import { useCommandCenter } from "../../contexts/CommandCenterContext";
+import { useWidgets } from "../../contexts/WidgetContext";
 import { briefPath, formatTaskDate } from "../../lib/adTaskBrief";
+import { AD_PHASES } from "../../data/adProduction";
 import { APP_GUTTER, COMMAND_BAR } from "./chrome";
 import TickerMarquee from "./AnnouncementTicker";
 import { useGetContentList } from "../../api/content/hooks";
@@ -33,12 +37,14 @@ const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 export default function FloatingNav({ progress = 0, settling = false }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const navRef = useRef(null);
   const searchRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, boardItems } =
+  const { open: canvasOpen, toggle: toggleCanvas, setOpen: setCanvasOpen, boardItems, addTask, openTask } =
     useCommandCenter();
+  const { openCreateGallery, openAsset } = useWidgets();
   const docked = progress > 0.45;
   const debouncedSearch = useDebounce(searchQuery, 350);
   const { data: searchResp, isFetching: searchLoading } = useGetContentList(
@@ -64,7 +70,7 @@ export default function FloatingNav({ progress = 0, settling = false }) {
       brief: a.campaignNames?.[0] || "Library asset",
       status: a.status,
       dateSubmitted: a.dateSubmitted,
-      onClick: () => navigate(`/?assetId=${a.id}`),
+      onClick: () => openAsset(a),
     }));
 
     const briefResults = boardItems
@@ -87,14 +93,18 @@ export default function FloatingNav({ progress = 0, settling = false }) {
       }));
 
     return [...assetResults, ...briefResults].slice(0, 10);
-  }, [searchQuery, searchResp, navigate, boardItems]);
+  }, [searchQuery, searchResp, openAsset, boardItems, navigate]);
 
   useEffect(() => {
     setSearchFocused(false);
+    setCreateOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (docked) setSearchFocused(false);
+    if (docked) {
+      setSearchFocused(false);
+      setCreateOpen(false);
+    }
   }, [docked]);
 
   useEffect(() => {
@@ -104,7 +114,10 @@ export default function FloatingNav({ progress = 0, settling = false }) {
         setSearchFocused(true);
         setTimeout(() => searchRef.current?.focus(), 100);
       }
-      if (e.key === "Escape") setSearchFocused(false);
+      if (e.key === "Escape") {
+        setSearchFocused(false);
+        setCreateOpen(false);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -114,6 +127,7 @@ export default function FloatingNav({ progress = 0, settling = false }) {
     const handler = (e) => {
       if (navRef.current && !navRef.current.contains(e.target)) {
         setSearchFocused(false);
+        setCreateOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -201,17 +215,32 @@ export default function FloatingNav({ progress = 0, settling = false }) {
 
         <div className="flex items-center gap-0.5 flex-shrink-0">
         {!docked && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearchFocused((prev) => !prev);
-              setTimeout(() => searchRef.current?.focus(), 80);
-            }}
-            className={iconBtn(searchFocused)}
-            aria-label="Search"
-          >
-            <Search size={14} />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateOpen(false);
+                setSearchFocused((prev) => !prev);
+                setTimeout(() => searchRef.current?.focus(), 80);
+              }}
+              className={iconBtn(searchFocused)}
+              aria-label="Search"
+            >
+              <Search size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchFocused(false);
+                setCreateOpen((prev) => !prev);
+              }}
+              className={iconBtn(createOpen)}
+              aria-label="Create"
+              title="Create"
+            >
+              <Plus size={16} strokeWidth={2.2} />
+            </button>
+          </>
         )}
         </div>
       </div>
@@ -286,6 +315,54 @@ export default function FloatingNav({ progress = 0, settling = false }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {createOpen && !docked && (
+        <div
+          className={`absolute right-4 ${popoverAnchor} w-[240px] glass-panel rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/40 animate-expand-popup`}
+        >
+          <div className="px-3 py-2 border-b border-white/[0.06]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
+              Create
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateOpen(false);
+              openCreateGallery();
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors"
+          >
+            <span className="size-7 rounded-lg bg-white/[0.06] text-[#E8C4A0] flex items-center justify-center shrink-0">
+              <Images size={13} />
+            </span>
+            <span>
+              <span className="block text-[12px] font-semibold text-white/90">New Gallery</span>
+              <span className="block text-[10px] text-white/35">Collection of assets</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateOpen(false);
+              const created = addTask(AD_PHASES[0].id);
+              if (created) {
+                setCanvasOpen(true);
+                openTask(created.id);
+              }
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors"
+          >
+            <span className="size-7 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-400/20 flex items-center justify-center shrink-0">
+              <ListTodo size={13} />
+            </span>
+            <span>
+              <span className="block text-[12px] font-semibold text-white/90">New Task</span>
+              <span className="block text-[10px] text-white/35">Add to command center</span>
+            </span>
+          </button>
         </div>
       )}
 

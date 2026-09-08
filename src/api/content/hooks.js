@@ -79,6 +79,7 @@ export const useMergedContentList = (payload, productIds) => {
       isLoading: multi.some((q) => q.isLoading),
       isFetching: multi.some((q) => q.isFetching),
       isError: multi.some((q) => q.isError),
+      error: multi.find((q) => q.error)?.error,
       refetch: () => Promise.all(multi.map((q) => q.refetch())),
     };
   }
@@ -89,6 +90,7 @@ export const useMergedContentList = (payload, productIds) => {
     isLoading: single.isLoading,
     isFetching: single.isFetching,
     isError: single.isError,
+    error: single.error,
     refetch: single.refetch,
   };
 };

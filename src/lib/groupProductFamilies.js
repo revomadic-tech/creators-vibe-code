@@ -120,9 +120,12 @@ export function groupProductFamilies(products) {
     const variants = sorted.slice(1);
     const assetCount = members.reduce((sum, p) => sum + (Number(p.assetCount) || 0), 0);
     const variantIds = [...new Set(members.map((p) => String(p.id)))];
+    const thumbnail =
+      parent.thumbnail || variants.find((p) => p.thumbnail)?.thumbnail || "";
     return {
       ...parent,
       name: parent.name || titleCase(productFamilyKey(parent.name)),
+      thumbnail,
       assetCount,
       variantIds,
       variants,

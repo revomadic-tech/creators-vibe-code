@@ -1,65 +1,167 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import FloatingNav from "./FloatingNav";
 import CommandCenterNav from "./CommandCenterNav";
 import TaskWidget from "./TaskWidget";
 import { CommandCenterProvider } from "../../contexts/CommandCenterContext";
+import { WidgetProvider } from "../../contexts/WidgetContext";
 import { useCommandCenterGesture } from "../../hooks/useCommandCenterGesture";
 import StaffPanel from "../shared/StaffPanel";
 import CommandCenter from "../../pages/CommandCenter";
+import WidgetHost from "./WidgetHost";
 import {
+  boardActorId,
+  claimUnownedDrafts,
   findAdTask,
-  loadBoardItems,
-  moveBoardTask,
-  persistBoardItems,
-  updateBoardTask,
+  visibleBoardItems,
 } from "../../data/adProduction";
+import {
+  BOARD_AD_PRODUCTION,
+  boardIdForItem,
+  boardIdForPhase,
+  createTaskOnBoard,
+  getCommandBoard,
+  loadActiveBoardId,
+  loadAllBoardItems,
+  moveTaskOnBoard,
+  persistActiveBoardId,
+  persistBoardById,
+  updateTaskOnBoard,
+} from "../../data/commandBoards";
 import { APP_CONTENT_INSET } from "./chrome";
+import useAuth from "../../hooks/useAuth";
+import { useAccountType } from "../../hooks/useAccountType";
 
 export default function AppShell() {
+  const { user } = useAuth();
+  const { identity } = useAccountType();
+  const actorId = boardActorId(identity || user);
   const [open, setOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
-  const [boardItems, setBoardItems] = useState(loadBoardItems);
+  const [activeBoardId, setActiveBoardIdState] = useState(loadActiveBoardId);
+  const [itemsByBoard, setItemsByBoard] = useState(loadAllBoardItems);
+  const itemsByBoardRef = useRef(itemsByBoard);
+  itemsByBoardRef.current = itemsByBoard;
   const shellRef = useRef(null);
   const canvasRef = useRef(null);
   const gesture = useCommandCenterGesture(open, setOpen, shellRef, canvasRef);
 
+  const setActiveBoardId = useCallback((id) => {
+    const next = getCommandBoard(id).id;
+    setActiveBoardIdState(next);
+    persistActiveBoardId(next);
+  }, []);
+
+  const allItems = useMemo(
+    () => Object.values(itemsByBoard).flat(),
+    [itemsByBoard],
+  );
+
+  const visibleItems = useMemo(
+    () => visibleBoardItems(allItems, actorId),
+    [allItems, actorId],
+  );
+
+  const activeBoardItems = useMemo(
+    () =>
+      visibleBoardItems(itemsByBoard[activeBoardId] || [], actorId),
+    [itemsByBoard, activeBoardId, actorId],
+  );
+
+  const commitBoard = useCallback((boardId, nextItems) => {
+    persistBoardById(boardId, nextItems);
+    setItemsByBoard((prev) => {
+      const next = { ...prev, [boardId]: nextItems };
+      itemsByBoardRef.current = next;
+      return next;
+    });
+  }, []);
+
   const findTask = useCallback(
-    (ref) => findAdTask(ref, boardItems),
-    [boardItems],
+    (ref) => findAdTask(ref, visibleItems),
+    [visibleItems],
   );
 
   const openTask = useCallback(
     (ref) => {
-      const item = findAdTask(ref, boardItems);
+      const item = findAdTask(ref, visibleItems);
       if (!item) return null;
+      const boardId = boardIdForItem(item);
+      if (boardId !== activeBoardId) setActiveBoardId(boardId);
       setSelectedTaskId(item.id);
       return item;
     },
-    [boardItems],
+    [visibleItems, activeBoardId, setActiveBoardId],
   );
 
   const closeTask = useCallback(() => setSelectedTaskId(null), []);
 
   const moveTask = useCallback((taskId, toPhase, beforeId) => {
-    setBoardItems((prev) => {
-      const next = moveBoardTask(prev, taskId, toPhase, beforeId);
-      persistBoardItems(next);
-      return next;
-    });
-  }, []);
+    const current = itemsByBoardRef.current;
+    const fromBoard =
+      boardIdForItem(
+        Object.values(current)
+          .flat()
+          .find((item) => item.id === taskId),
+      ) || BOARD_AD_PRODUCTION;
+    const toBoard = boardIdForPhase(toPhase);
+    if (fromBoard !== toBoard) return;
+    const next = moveTaskOnBoard(toBoard, current[toBoard] || [], taskId, toPhase, beforeId);
+    commitBoard(toBoard, next);
+  }, [commitBoard]);
 
   const updateTask = useCallback((taskId, patch) => {
-    setBoardItems((prev) => {
-      const next = updateBoardTask(prev, taskId, patch);
-      if (next !== prev) persistBoardItems(next);
-      return next;
-    });
-  }, []);
+    const current = itemsByBoardRef.current;
+    const item = Object.values(current)
+      .flat()
+      .find((row) => row.id === taskId);
+    if (!item) return;
+    const boardId = boardIdForItem(item);
+    const nextPatch = { ...patch };
+    if (
+      nextPatch.status === "Draft" &&
+      actorId &&
+      (item.createdBy == null || item.createdBy === "")
+    ) {
+      nextPatch.createdBy = actorId;
+    }
+    const next = updateTaskOnBoard(boardId, current[boardId] || [], taskId, nextPatch);
+    if (next === current[boardId]) return;
+    commitBoard(boardId, next);
+  }, [actorId, commitBoard]);
+
+  const addTask = useCallback((phase, fields = {}) => {
+    const boardId = boardIdForPhase(phase) || activeBoardId || BOARD_AD_PRODUCTION;
+    const payload = {
+      name: "",
+      ...fields,
+      createdBy: fields.createdBy || actorId || null,
+    };
+    const { items, item } = createTaskOnBoard(
+      boardId,
+      itemsByBoardRef.current[boardId] || [],
+      phase,
+      payload,
+    );
+    if (!item) return null;
+    commitBoard(boardId, items);
+    if (boardId !== activeBoardId) setActiveBoardId(boardId);
+    setSelectedTaskId(item.id);
+    return item;
+  }, [actorId, activeBoardId, commitBoard, setActiveBoardId]);
 
   const selectedTask = selectedTaskId
-    ? boardItems.find((item) => item.id === selectedTaskId) || null
+    ? visibleItems.find((item) => item.id === selectedTaskId) || null
     : null;
+
+  useEffect(() => {
+    if (!actorId) return;
+    for (const boardId of Object.keys(itemsByBoardRef.current)) {
+      const prev = itemsByBoardRef.current[boardId] || [];
+      const next = claimUnownedDrafts(prev, actorId);
+      if (next !== prev) commitBoard(boardId, next);
+    }
+  }, [actorId, commitBoard]);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -81,12 +183,17 @@ export default function AppShell() {
         selectedTaskId,
         openTask,
         closeTask,
-        boardItems,
+        boardItems: visibleItems,
+        activeBoardItems,
+        activeBoardId,
+        setActiveBoardId,
         findTask,
         moveTask,
         updateTask,
+        addTask,
       }}
     >
+      <WidgetProvider>
       <div className="h-screen w-full max-w-full overflow-hidden overscroll-none lustrous-bg">
         <div className="ambient-orbs" aria-hidden="true">
           <span className="orb orb-smoke-a" />
@@ -100,6 +207,7 @@ export default function AppShell() {
         <div className="ui-glass-veil" aria-hidden="true" />
         <FloatingNav progress={gesture.progress} settling={gesture.settling} />
         <TaskWidget item={selectedTask} onClose={closeTask} />
+        <WidgetHost />
 
         <div
           className="absolute inset-0 z-[8] flex min-h-0 min-w-0"
@@ -139,6 +247,7 @@ export default function AppShell() {
           </div>
         </div>
       </div>
+      </WidgetProvider>
     </CommandCenterProvider>
   );
 }
